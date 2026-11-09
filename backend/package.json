@@ -1,0 +1,14 @@
+{
+  "name": "@bookstore/backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend REST API Server (Node.js + TypeScript) cho hệ sinh thái BookStore Enterprise",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.6.3"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Tri Thức Việt BookStore",
+    "slug": "tri-thuc-viet-bookstore",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "bookstore",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "vn.bookstore.trithucviet.client",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
+    },
+    "android": {
+      "package": "vn.bookstore.trithucviet.client",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#047857"
+      },
+      "permissions": [
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
+

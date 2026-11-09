@@ -1,0 +1,20 @@
+{
+  "name": "bookstore-enterprise-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hệ sinh thái Thương mại điện tử BookStore Enterprise (Client Mobile App + Admin Web Dashboard + Shared + Backend)",
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend/client-mobile",
+    "frontend/admin-web"
+  ],
+  "scripts": {
+    "typecheck:mobile": "npm --prefix frontend/client-mobile run typecheck",
+    "typecheck:admin": "npm --prefix frontend/admin-web run typecheck",
+    "build:admin": "npm --prefix frontend/admin-web run build",
+    "dev:admin": "npm --prefix frontend/admin-web run dev",
+    "dev:mobile": "npm --prefix frontend/client-mobile run start"
+  }
+}
+
