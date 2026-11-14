@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Book, Review, formatCurrencyVND } from '@shared/types';
+import { INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
 import { bookService } from '@/services/bookService';
 import { useCart } from '@/hooks/useCart';
@@ -22,7 +23,7 @@ import { EmptyStateView } from '@/components/common/StateViews';
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { addToCart } = useCart();
+  const { addToCart, appliedVoucher, applyVoucherCode } = useCart();
   const { wishlistBookIds, toggleWishlist } = useAuth();
   const { openChat, sendMessage } = useAiChat();
 
@@ -31,6 +32,7 @@ export default function BookDetailScreen() {
   const [quantity, setQuantity] = useState(1);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [addedToast, setAddedToast] = useState(false);
+  const [voucherSavedToast, setVoucherSavedToast] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -150,6 +152,51 @@ export default function BookDetailScreen() {
             <Text style={styles.currentPrice}>{formatCurrencyVND(effectivePrice)}</Text>
             {book.originalPrice > effectivePrice ? (
               <Text style={styles.oldPrice}>{formatCurrencyVND(book.originalPrice)}</Text>
+            ) : null}
+          </View>
+
+          {/* Shop Vouchers Bar (Giống Shopee / Fahasa thực tế) */}
+          <View style={styles.shopVoucherBar}>
+            <View style={styles.shopVoucherLabelRow}>
+              <Ionicons name="ticket-outline" size={16} color={colors.accent} />
+              <Text style={styles.shopVoucherLabel}>Mã giảm giá của Shop:</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {INITIAL_VOUCHERS.map((v) => {
+                const isSelected = appliedVoucher?.code === v.code;
+                return (
+                  <Pressable
+                    key={v.id}
+                    onPress={() => {
+                      applyVoucherCode(v.code);
+                      setVoucherSavedToast(`Đã chọn mã ${v.code} (${v.title})`);
+                      setTimeout(() => setVoucherSavedToast(null), 2500);
+                    }}
+                    style={[
+                      styles.shopVoucherTag,
+                      isSelected && styles.shopVoucherTagActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.shopVoucherTagText,
+                        isSelected && { color: '#FFFFFF' },
+                      ]}
+                    >
+                      {v.discountType === 'PERCENTAGE'
+                        ? `Giảm ${v.discountValue}%`
+                        : `Giảm ${v.discountValue / 1000}K`}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {voucherSavedToast ? (
+              <Text style={styles.voucherToastText}>✓ {voucherSavedToast}</Text>
             ) : null}
           </View>
 
@@ -336,13 +383,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 16,
+    marginHorizontal: 12,
+    padding: 12,
+    borderRadius: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -350,13 +397,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
     backgroundColor: colors.primarySoft,
   },
   categoryTagText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
   },
@@ -364,32 +411,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
     backgroundColor: colors.accent,
   },
   flashTagText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   wishlistBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bookTitle: {
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 15.5,
+    fontWeight: '700',
     color: colors.textPrimary,
-    lineHeight: 26,
+    lineHeight: 21,
   },
   authorText: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: colors.textSecondary,
   },
   statsRow: {
@@ -404,98 +451,139 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   ratingCount: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textMuted,
   },
   dotSep: {
     color: colors.textMuted,
   },
   soldText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   stockText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.primary,
     fontWeight: '600',
   },
   priceBox: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     backgroundColor: colors.background,
   },
   currentPrice: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.accent,
   },
   oldPrice: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
+  },
+  shopVoucherBar: {
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  shopVoucherLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  shopVoucherLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#9A3412',
+  },
+  shopVoucherTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: '#FFFFFF',
+  },
+  shopVoucherTagActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  shopVoucherTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  voucherToastText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary,
   },
   aiSummaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 8,
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
     borderColor: colors.primaryBorder,
   },
   aiSummaryBtnText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.primaryDark,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   specRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
   },
   specLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   specValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   summaryHighlight: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '600',
     color: colors.textPrimary,
-    lineHeight: 21,
+    lineHeight: 19,
   },
   descriptionText: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: 19,
   },
   reviewItem: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
-    gap: 4,
+    gap: 3,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -503,38 +591,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   reviewerName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   reviewComment: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    lineHeight: 19,
+    lineHeight: 18,
   },
   toastBanner: {
     position: 'absolute',
-    bottom: 84,
-    left: 20,
-    right: 20,
+    bottom: 74,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
+    padding: 10,
+    borderRadius: 8,
     backgroundColor: colors.textPrimary,
   },
   toastText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -542,52 +630,52 @@ const styles = StyleSheet.create({
   qtyStepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
   qtyBtn: {
-    width: 36,
-    height: 42,
+    width: 30,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyValue: {
-    minWidth: 26,
+    minWidth: 22,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   cartBtn: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: 12,
-    borderWidth: 1.5,
+    gap: 5,
+    borderRadius: 6,
+    borderWidth: 1,
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
   cartBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.primary,
   },
   buyNowBtn: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: colors.primary,
   },
   buyNowBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   zoomModalBg: {

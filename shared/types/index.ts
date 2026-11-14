@@ -267,7 +267,7 @@ export interface ChatMessage {
 // ============================================================================
 
 export function formatCurrencyVND(amount: number): string {
-  return `${Math.round(amount).toLocaleString('vi-VN')} đ`;
+  return `${Math.round(amount).toLocaleString('vi-VN')}đ`;
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {

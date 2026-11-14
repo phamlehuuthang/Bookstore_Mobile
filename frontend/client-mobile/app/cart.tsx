@@ -231,12 +231,34 @@ export default function CartScreen() {
           </View>
         </ScrollView>
 
-        {/* Bottom Sticky Checkout Bar */}
+        {/* Bottom Sticky Checkout Bar (Chuẩn Shopee) */}
         <View style={styles.bottomBar}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bottomSub}>Tổng cộng ({selectedItems.length} cuốn):</Text>
-            <Text style={styles.bottomTotal}>{formatCurrencyVND(finalTotal)}</Text>
+          <Pressable
+            onPress={() => toggleSelectAll(!allSelected)}
+            style={styles.bottomSelectAll}
+          >
+            <Ionicons
+              name={allSelected ? 'checkbox' : 'square-outline'}
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.bottomSelectAllText}>Tất cả</Text>
+          </Pressable>
+
+          <View style={styles.bottomPriceCol}>
+            <View style={styles.bottomTotalRow}>
+              <Text style={styles.bottomSub}>Tổng cộng </Text>
+              <Text numberOfLines={1} style={styles.bottomTotal}>
+                {formatCurrencyVND(finalTotal)}
+              </Text>
+            </View>
+            {discountAmount > 0 ? (
+              <Text numberOfLines={1} style={styles.bottomSaved}>
+                Tiết kiệm {formatCurrencyVND(discountAmount)}
+              </Text>
+            ) : null}
           </View>
+
           <Pressable
             disabled={selectedItems.length === 0}
             onPress={() => router.push('/checkout')}
@@ -246,8 +268,9 @@ export default function CartScreen() {
               pressed && { transform: [{ scale: 0.98 }] },
             ]}
           >
-            <Text style={styles.checkoutBtnText}>Thanh toán ngay</Text>
-            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+            <Text style={styles.checkoutBtnText}>
+              Mua hàng ({selectedItems.length})
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -264,8 +287,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -273,97 +296,97 @@ const styles = StyleSheet.create({
   selectAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   selectAllText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.textPrimary,
   },
   freeshipHint: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.primary,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 110,
-    gap: 14,
+    padding: 12,
+    paddingBottom: 96,
+    gap: 10,
   },
   cartCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 14,
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
   checkWrap: {
-    padding: 4,
+    padding: 2,
   },
   cover: {
-    width: 64,
-    height: 88,
-    borderRadius: 8,
+    width: 56,
+    height: 76,
+    borderRadius: 6,
     backgroundColor: colors.surfaceMuted,
   },
   bookTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.textPrimary,
-    lineHeight: 19,
+    lineHeight: 17,
   },
   authorText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
   },
   unitPrice: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.accent,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 2,
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
   stepBtn: {
-    width: 32,
-    height: 32,
+    width: 26,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepValue: {
-    minWidth: 26,
+    minWidth: 24,
     textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.textPrimary,
   },
   deleteBtn: {
-    padding: 6,
+    padding: 4,
   },
   voucherSection: {
-    padding: 14,
-    borderRadius: 14,
+    padding: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -373,134 +396,158 @@ const styles = StyleSheet.create({
   },
   voucherInput: {
     flex: 1,
-    minHeight: 42,
-    borderRadius: 10,
+    minHeight: 38,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
-    paddingHorizontal: 12,
-    fontSize: 13,
+    paddingHorizontal: 10,
+    fontSize: 12,
     color: colors.textPrimary,
   },
   applyBtn: {
-    minHeight: 42,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   applyBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
   },
   errorText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: colors.danger,
     fontWeight: '600',
   },
   appliedPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: 10,
+    gap: 6,
+    padding: 8,
+    borderRadius: 8,
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
     borderColor: colors.primaryBorder,
   },
   appliedText: {
     flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11.5,
+    fontWeight: '600',
     color: colors.primaryDark,
   },
   quickVoucherChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
   },
   quickVoucherCode: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: colors.primary,
   },
   quickVoucherDesc: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.textSecondary,
   },
   summaryCard: {
-    padding: 16,
-    borderRadius: 14,
+    padding: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   summaryLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
   },
   summaryValue: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   summaryTotalRow: {
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
   },
   totalLabel: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   totalValue: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.primary,
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  bottomSub: {
+  bottomSelectAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  bottomSelectAllText: {
     fontSize: 12,
     color: colors.textSecondary,
   },
+  bottomPriceCol: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  bottomTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  bottomSub: {
+    fontSize: 11.5,
+    color: colors.textSecondary,
+  },
   bottomTotal: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.primary,
   },
+  bottomSaved: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: colors.primary,
+    marginTop: 1,
+  },
   checkoutBtn: {
-    minHeight: 46,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 8,
     backgroundColor: colors.primary,
   },
   checkoutBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

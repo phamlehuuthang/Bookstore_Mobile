@@ -127,13 +127,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setVoucherError('Mã giảm giá không tồn tại hoặc đã hết hạn.');
       return false;
     }
-    if (subtotal < found.minOrderValue) {
-      setVoucherError(
-        `Đơn hàng cần tối thiểu ${found.minOrderValue.toLocaleString('vi-VN')} đ để áp dụng mã ${found.code}.`
-      );
-      return false;
-    }
     setAppliedVoucher(found);
+    if (subtotal > 0 && subtotal < found.minOrderValue) {
+      setVoucherError(
+        `Đơn hàng cần tối thiểu ${found.minOrderValue.toLocaleString('vi-VN')} đ để kích hoạt mã ${found.code}.`
+      );
+    }
     return true;
   };
 

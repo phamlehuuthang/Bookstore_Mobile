@@ -650,6 +650,20 @@ export const INITIAL_VOUCHERS: Voucher[] = [
     endDate: '2026-12-31',
     isActive: true,
   },
+  {
+    id: 'vch-4',
+    code: 'BANMOI20K',
+    title: 'Giảm 20.000 đ cho mọi đơn sách',
+    description: 'Ưu đãi chào bạn đọc mới, áp dụng cho đơn từ 50.000 đ',
+    discountType: 'FIXED',
+    discountValue: 20000,
+    minOrderValue: 50000,
+    usageLimit: 1000,
+    usedCount: 410,
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+    isActive: true,
+  },
 ];
 
 export const INITIAL_ORDERS: Order[] = [
