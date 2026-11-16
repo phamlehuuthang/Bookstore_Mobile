@@ -5,7 +5,6 @@
   "description": "Hệ sinh thái Thương mại điện tử BookStore Enterprise (Client Mobile App + Admin Web Dashboard + Shared + Backend)",
   "workspaces": [
     "shared",
-    "backend",
     "frontend/client-mobile",
     "frontend/admin-web"
   ],

@@ -146,7 +146,7 @@ CREATE TABLE ma_giam_gia (
     ma_code VARCHAR(30) UNIQUE NOT NULL,
     tieu_de VARCHAR(150) NOT NULL,
     mo_ta VARCHAR(500),
-    loai_giam VARCHAR(20) NOT NULL CHECK (loai_giam IN ('FIXED', 'PERCENTAGE')),
+    loai_giam VARCHAR(20) NOT NULL CHECK (loai_giam IN ('CO_DINH', 'PHAN_TRAM')),
     gia_tri_giam DECIMAL(12, 0) NOT NULL,
     giam_toi_da DECIMAL(12, 0),
     don_toi_thieu DECIMAL(12, 0) NOT NULL DEFAULT 0,
@@ -169,10 +169,10 @@ CREATE TABLE don_hang (
     tien_giam_gia DECIMAL(12, 0) NOT NULL DEFAULT 0,
     ma_giam_gia_code VARCHAR(30) REFERENCES ma_giam_gia(ma_code),
     tong_thanh_toan DECIMAL(15, 0) NOT NULL,
-    phuong_thuc_thanh_toan VARCHAR(20) NOT NULL CHECK (phuong_thuc_thanh_toan IN ('COD', 'BANK_QR', 'EWALLET')),
-    trang_thai_thanh_toan VARCHAR(20) NOT NULL DEFAULT 'UNPAID' CHECK (trang_thai_thanh_toan IN ('UNPAID', 'PAID', 'REFUNDED')),
-    trang_thai_don VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-        CHECK (trang_thai_don IN ('PENDING', 'PREPARING', 'SHIPPING', 'DELIVERED', 'CANCELLED')),
+    phuong_thuc_thanh_toan VARCHAR(20) NOT NULL CHECK (phuong_thuc_thanh_toan IN ('TIEN_MAT_COD', 'CHUYEN_KHOAN_QR', 'VI_DIEN_TU')),
+    trang_thai_thanh_toan VARCHAR(20) NOT NULL DEFAULT 'CHUA_THANH_TOAN' CHECK (trang_thai_thanh_toan IN ('CHUA_THANH_TOAN', 'DA_THANH_TOAN', 'DA_HOAN_TIEN')),
+    trang_thai_don VARCHAR(20) NOT NULL DEFAULT 'CHO_XAC_NHAN'
+        CHECK (trang_thai_don IN ('CHO_XAC_NHAN', 'DANG_DONG_GOI', 'DANG_GIAO', 'DA_GIAO', 'DA_HUY')),
     ghi_chu VARCHAR(500),
     da_danh_gia BOOLEAN NOT NULL DEFAULT FALSE,
     ngay_tao TIMESTAMP NOT NULL DEFAULT NOW()
@@ -220,7 +220,7 @@ CREATE TABLE yeu_cau_doi_tra (
     ly_do VARCHAR(255) NOT NULL,
     mo_ta VARCHAR(1000) NOT NULL,
     anh_minh_chung_urls TEXT NOT NULL,
-    trang_thai VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (trang_thai IN ('PENDING', 'APPROVED', 'REJECTED')),
+    trang_thai VARCHAR(20) NOT NULL DEFAULT 'CHO_DUYET' CHECK (trang_thai IN ('CHO_DUYET', 'DA_CHAP_THUAN', 'TU_CHOI')),
     ghi_chu_admin VARCHAR(500),
     ngay_tao TIMESTAMP NOT NULL DEFAULT NOW(),
     ngay_xu_ly TIMESTAMP NULL
@@ -235,7 +235,7 @@ CREATE TABLE thong_bao (
     nguoi_dung_id VARCHAR(50) NULL REFERENCES tk_nguoi_dung(id) ON DELETE CASCADE,
     tieu_de VARCHAR(200) NOT NULL,
     noi_dung VARCHAR(1000) NOT NULL,
-    loai_thong_bao VARCHAR(20) NOT NULL CHECK (loai_thong_bao IN ('ORDER', 'PROMO', 'SYSTEM')),
+    loai_thong_bao VARCHAR(20) NOT NULL CHECK (loai_thong_bao IN ('DON_HANG', 'KHUYEN_MAI', 'HE_THONG')),
     da_doc BOOLEAN NOT NULL DEFAULT FALSE,
     ngay_tao TIMESTAMP NOT NULL DEFAULT NOW()
 );

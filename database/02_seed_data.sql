@@ -404,12 +404,12 @@ INSERT INTO sach (id, ma_isbn, tieu_de, duong_dan, danh_muc_id, ten_danh_muc_con
 ('sach_186', '9786041025482', 'Troilus and Cressida', 'troilus-and-cressida-sach_186', 'dm_ngoai_ngu', 'Ngoại ngữ & Học thuật', 'tg_004', 'nxb_nha_nam', 104000, 130000, FALSE, NULL, 73, 278, 4.23, 155, 453, 2008, 'Bìa mềm', 'https://covers.openlibrary.org/b/id/8789523-L.jpg', 'https://covers.openlibrary.org/b/id/8789523-L.jpg', 'Cuốn sách ''Troilus and Cressida'' của tác giả William Shakespeare thuộc chủ đề Ngoại ngữ & Học thuật, được độc giả đánh giá cao.', 'Tác phẩm ''Troilus and Cressida'' do William Shakespeare chắp bút mang đến góc nhìn sâu sắc và thực tiễn trong lĩnh vực Ngoại ngữ & Học thuật. Ấn bản chất lượng cao, trình bày rõ ràng, phù hợp cho cả người mới bắt đầu lẫn độc giả chuyên sâu.', 'ngoai-ngu-hoc-thuat, william shakespeare, sach-hay', FALSE, TRUE);
 
 INSERT INTO ma_giam_gia (id, ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, gioi_han_luot, da_su_dung, ngay_bat_dau, ngay_ket_thuc, dang_hoat_dong) VALUES
-('mgg_01', 'CHAOBAN20', 'Giảm 20.000đ cho bạn mới', 'Áp dụng cho đơn hàng đầu tiên từ 150.000đ', 'FIXED', 20000, NULL, 150000, 500, 120, '2026-01-01', '2026-12-31', TRUE),
-('mgg_02', 'SACHHAY15', 'Giảm 15% tối đa 50.000đ', 'Áp dụng cho toàn bộ sách trong cửa hàng', 'PERCENTAGE', 15, 50000, 200000, 1000, 340, '2026-01-01', '2026-12-31', TRUE),
-('mgg_03', 'FREESHIP30', 'Hỗ trợ phí ship 30.000đ', 'Dành cho đơn hàng từ 250.000đ', 'FIXED', 30000, NULL, 250000, 800, 210, '2026-06-01', '2026-12-31', TRUE),
-('mgg_04', 'CONGNGHE25', 'Giảm 25% sách Công nghệ', 'Tối đa 80.000đ cho đơn từ 350.000đ', 'PERCENTAGE', 25, 80000, 350000, 300, 85, '2026-06-01', '2026-12-31', TRUE),
-('mgg_05', 'VIP100K', 'Ưu đãi thành viên VIP 100.000đ', 'Áp dụng cho đơn hàng từ 700.000đ', 'FIXED', 100000, NULL, 700000, 100, 22, '2026-01-01', '2026-12-31', TRUE),
-('mgg_06', 'HETHAN10', 'Mã khuyến mãi cũ đã hết hạn', 'Chương trình tháng 5 đã kết thúc', 'PERCENTAGE', 10, 30000, 100000, 200, 200, '2026-05-01', '2026-05-31', FALSE);
+('mgg_01', 'CHAOBAN20', 'Giảm 20.000đ cho bạn mới', 'Áp dụng cho đơn hàng đầu tiên từ 150.000đ', 'CO_DINH', 20000, NULL, 150000, 500, 120, '2026-01-01', '2026-12-31', TRUE),
+('mgg_02', 'SACHHAY15', 'Giảm 15% tối đa 50.000đ', 'Áp dụng cho toàn bộ sách trong cửa hàng', 'PHAN_TRAM', 15, 50000, 200000, 1000, 340, '2026-01-01', '2026-12-31', TRUE),
+('mgg_03', 'FREESHIP30', 'Hỗ trợ phí ship 30.000đ', 'Dành cho đơn hàng từ 250.000đ', 'CO_DINH', 30000, NULL, 250000, 800, 210, '2026-06-01', '2026-12-31', TRUE),
+('mgg_04', 'CONGNGHE25', 'Giảm 25% sách Công nghệ', 'Tối đa 80.000đ cho đơn từ 350.000đ', 'PHAN_TRAM', 25, 80000, 350000, 300, 85, '2026-06-01', '2026-12-31', TRUE),
+('mgg_05', 'VIP100K', 'Ưu đãi thành viên VIP 100.000đ', 'Áp dụng cho đơn hàng từ 700.000đ', 'CO_DINH', 100000, NULL, 700000, 100, 22, '2026-01-01', '2026-12-31', TRUE),
+('mgg_06', 'HETHAN10', 'Mã khuyến mãi cũ đã hết hạn', 'Chương trình tháng 5 đã kết thúc', 'PHAN_TRAM', 10, 30000, 100000, 200, 200, '2026-05-01', '2026-05-31', FALSE);
 
 INSERT INTO phieu_nhap_kho (id, ma_phieu, ten_nha_cung_cap, nguoi_tao, ghi_chu, tong_so_luong, tong_tien_nhap) VALUES
 ('pnk_01', 'PNK-202611-001', 'Công ty Phát hành Sách Fahasa', 'Trần Quốc Đạt', 'Nhập bổ sung sách Văn học & Kỹ năng', 150, 14500000),
@@ -423,14 +423,14 @@ INSERT INTO chi_tiet_phieu_nhap (id, phieu_nhap_id, sach_id, so_luong, gia_nhap)
 ('ctpn_05', 'pnk_02', 'sach_005', 60, 180000);
 
 INSERT INTO don_hang (id, ma_don_hang, nguoi_dung_id, ten_khach_hang, sdt_khach_hang, dia_chi_giao_hang, tam_tinh, phi_van_chuyen, tien_giam_gia, ma_giam_gia_code, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don, ghi_chu, da_danh_gia) VALUES
-('dh_01', 'DH-202611-001', 'nd_kh01', 'Nguyễn Hữu Thắng', '0912345601', '12 Lê Lợi, Bến Nghé, Q.1, TP.HCM', 420000, 0, 50000, 'SACHHAY15', 370000, 'BANK_QR', 'PAID', 'DELIVERED', 'Giao giờ hành chính', TRUE),
-('dh_02', 'DH-202611-002', 'nd_kh02', 'Trần Minh Anh', '0912345602', '45 Xuân Thủy, Cầu Giấy, Hà Nội', 280000, 25000, 20000, 'CHAOBAN20', 285000, 'COD', 'PAID', 'DELIVERED', NULL, TRUE),
-('dh_03', 'DH-202611-003', 'nd_kh03', 'Lê Hoàng Nam', '0912345603', '102 Bạch Đằng, Hải Châu, Đà Nẵng', 350000, 0, 30000, 'FREESHIP30', 320000, 'EWALLET', 'PAID', 'SHIPPING', 'Gọi trước khi giao', FALSE),
-('dh_04', 'DH-202611-004', 'nd_kh04', 'Phạm Thu Hà', '0912345604', '25 Thái Hà, Đống Đa, Hà Nội', 190000, 25000, 0, NULL, 215000, 'COD', 'UNPAID', 'PREPARING', NULL, FALSE),
-('dh_05', 'DH-202611-005', 'nd_kh05', 'Võ Quốc Bảo', '0912345605', '19 Hòa Bình, Ninh Kiều, Cần Thơ', 510000, 0, 80000, 'CONGNGHE25', 430000, 'BANK_QR', 'PAID', 'PENDING', 'Đóng gói chống sốc kỹ', FALSE),
-('dh_06', 'DH-202611-006', 'nd_kh06', 'Đặng Thùy Linh', '0912345606', 'Khu phố 6, Linh Trung, Thủ Đức, TP.HCM', 240000, 25000, 0, NULL, 265000, 'COD', 'UNPAID', 'CANCELLED', 'Khách đổi ý đặt lại bộ khác', FALSE),
-('dh_07', 'DH-202611-007', 'nd_kh07', 'Hoàng Gia Huy', '0912345607', '34 Lê Thánh Tông, Ngô Quyền, Hải Phòng', 310000, 0, 20000, 'CHAOBAN20', 290000, 'EWALLET', 'PAID', 'DELIVERED', NULL, TRUE),
-('dh_08', 'DH-202611-008', 'nd_kh10', 'Ngô Thanh Thảo', '0912345610', '210 Điện Biên Phủ, Bình Thạnh, TP.HCM', 760000, 0, 100000, 'VIP100K', 660000, 'BANK_QR', 'PAID', 'DELIVERED', NULL, FALSE);
+('dh_01', 'DH-202611-001', 'nd_kh01', 'Nguyễn Hữu Thắng', '0912345601', '12 Lê Lợi, Bến Nghé, Q.1, TP.HCM', 420000, 0, 50000, 'SACHHAY15', 370000, 'CHUYEN_KHOAN_QR', 'DA_THANH_TOAN', 'DA_GIAO', 'Giao giờ hành chính', TRUE),
+('dh_02', 'DH-202611-002', 'nd_kh02', 'Trần Minh Anh', '0912345602', '45 Xuân Thủy, Cầu Giấy, Hà Nội', 280000, 25000, 20000, 'CHAOBAN20', 285000, 'TIEN_MAT_COD', 'DA_THANH_TOAN', 'DA_GIAO', NULL, TRUE),
+('dh_03', 'DH-202611-003', 'nd_kh03', 'Lê Hoàng Nam', '0912345603', '102 Bạch Đằng, Hải Châu, Đà Nẵng', 350000, 0, 30000, 'FREESHIP30', 320000, 'VI_DIEN_TU', 'DA_THANH_TOAN', 'DANG_GIAO', 'Gọi trước khi giao', FALSE),
+('dh_04', 'DH-202611-004', 'nd_kh04', 'Phạm Thu Hà', '0912345604', '25 Thái Hà, Đống Đa, Hà Nội', 190000, 25000, 0, NULL, 215000, 'TIEN_MAT_COD', 'CHUA_THANH_TOAN', 'DANG_DONG_GOI', NULL, FALSE),
+('dh_05', 'DH-202611-005', 'nd_kh05', 'Võ Quốc Bảo', '0912345605', '19 Hòa Bình, Ninh Kiều, Cần Thơ', 510000, 0, 80000, 'CONGNGHE25', 430000, 'CHUYEN_KHOAN_QR', 'DA_THANH_TOAN', 'CHO_XAC_NHAN', 'Đóng gói chống sốc kỹ', FALSE),
+('dh_06', 'DH-202611-006', 'nd_kh06', 'Đặng Thùy Linh', '0912345606', 'Khu phố 6, Linh Trung, Thủ Đức, TP.HCM', 240000, 25000, 0, NULL, 265000, 'TIEN_MAT_COD', 'CHUA_THANH_TOAN', 'DA_HUY', 'Khách đổi ý đặt lại bộ khác', FALSE),
+('dh_07', 'DH-202611-007', 'nd_kh07', 'Hoàng Gia Huy', '0912345607', '34 Lê Thánh Tông, Ngô Quyền, Hải Phòng', 310000, 0, 20000, 'CHAOBAN20', 290000, 'VI_DIEN_TU', 'DA_THANH_TOAN', 'DA_GIAO', NULL, TRUE),
+('dh_08', 'DH-202611-008', 'nd_kh10', 'Ngô Thanh Thảo', '0912345610', '210 Điện Biên Phủ, Bình Thạnh, TP.HCM', 760000, 0, 100000, 'VIP100K', 660000, 'CHUYEN_KHOAN_QR', 'DA_THANH_TOAN', 'DA_GIAO', NULL, FALSE);
 
 INSERT INTO chi_tiet_don_hang (id, don_hang_id, sach_id, tieu_de_sach, anh_bia_url, ten_tac_gia, don_gia, so_luong) VALUES
 ('ctdh_01', 'dh_01', 'sach_001', 'Alice''s Adventures in Wonderland', 'https://covers.openlibrary.org/b/id/10527843-L.jpg', 'Lewis Carroll', 102000, 2),
@@ -443,14 +443,14 @@ INSERT INTO chi_tiet_don_hang (id, don_hang_id, sach_id, tieu_de_sach, anh_bia_u
 ('ctdh_08', 'dh_08', 'sach_008', 'A Tale of Two Cities', 'https://covers.openlibrary.org/b/id/13301713-L.jpg', 'Charles Dickens', 315000, 2);
 
 INSERT INTO lich_su_don_hang (id, don_hang_id, trang_thai, tieu_de, mo_ta, thoi_gian) VALUES
-('ls_01', 'dh_01', 'PENDING', 'Đặt hàng thành công', 'Khách hàng đã đặt đơn qua ứng dụng', '2026-11-10 09:00'),
-('ls_02', 'dh_01', 'PREPARING', 'Đang đóng gói', 'Kho đã xác nhận và đóng gói sách', '2026-11-10 11:30'),
-('ls_03', 'dh_01', 'SHIPPING', 'Đang giao hàng', 'Đơn vị vận chuyển đã lấy hàng', '2026-11-11 08:15'),
-('ls_04', 'dh_01', 'DELIVERED', 'Giao hàng thành công', 'Khách hàng đã nhận đủ sách', '2026-11-12 14:20'),
-('ls_05', 'dh_02', 'PENDING', 'Đặt hàng thành công', 'Đơn hàng COD được tiếp nhận', '2026-11-11 10:00'),
-('ls_06', 'dh_02', 'DELIVERED', 'Giao hàng thành công', 'Đã thu hộ COD và hoàn tất đơn', '2026-11-13 16:40'),
-('ls_07', 'dh_03', 'SHIPPING', 'Đang vận chuyển', 'Đang trên đường đến Đà Nẵng', '2026-11-14 07:45'),
-('ls_08', 'dh_06', 'CANCELLED', 'Đơn hàng đã hủy', 'Hủy theo yêu cầu của khách hàng', '2026-11-13 19:10');
+('ls_01', 'dh_01', 'CHO_XAC_NHAN', 'Đặt hàng thành công', 'Khách hàng đã đặt đơn qua ứng dụng', '2026-11-10 09:00'),
+('ls_02', 'dh_01', 'DANG_DONG_GOI', 'Đang đóng gói', 'Kho đã xác nhận và đóng gói sách', '2026-11-10 11:30'),
+('ls_03', 'dh_01', 'DANG_GIAO', 'Đang giao hàng', 'Đơn vị vận chuyển đã lấy hàng', '2026-11-11 08:15'),
+('ls_04', 'dh_01', 'DA_GIAO', 'Giao hàng thành công', 'Khách hàng đã nhận đủ sách', '2026-11-12 14:20'),
+('ls_05', 'dh_02', 'CHO_XAC_NHAN', 'Đặt hàng thành công', 'Đơn hàng COD được tiếp nhận', '2026-11-11 10:00'),
+('ls_06', 'dh_02', 'DA_GIAO', 'Giao hàng thành công', 'Đã thu hộ COD và hoàn tất đơn', '2026-11-13 16:40'),
+('ls_07', 'dh_03', 'DANG_GIAO', 'Đang vận chuyển', 'Đang trên đường đến Đà Nẵng', '2026-11-14 07:45'),
+('ls_08', 'dh_06', 'DA_HUY', 'Đơn hàng đã hủy', 'Hủy theo yêu cầu của khách hàng', '2026-11-13 19:10');
 
 INSERT INTO sach_yeu_thich (nguoi_dung_id, sach_id) VALUES
 ('nd_kh01', 'sach_001'),
@@ -478,9 +478,9 @@ INSERT INTO danh_gia (id, sach_id, nguoi_dung_id, don_hang_id, so_sao, binh_luan
 ('dg_05', 'sach_021', 'nd_kh10', NULL, 5, 'Shop tư vấn nhiệt tình, sách chính hãng 100%.', FALSE);
 
 INSERT INTO yeu_cau_doi_tra (id, don_hang_id, ly_do, mo_ta, anh_minh_chung_urls, trang_thai, ghi_chu_admin) VALUES
-('dt_01', 'dh_08', 'Bìa sách bị quăn góc nhẹ', 'Khi mở hộp thấy góc dưới bìa hơi móp do vận chuyển', 'https://covers.openlibrary.org/b/id/10527843-M.jpg', 'PENDING', 'Đang chờ CSKH xác nhận đổi cuốn mới');
+('dt_01', 'dh_08', 'Bìa sách bị quăn góc nhẹ', 'Khi mở hộp thấy góc dưới bìa hơi móp do vận chuyển', 'https://covers.openlibrary.org/b/id/10527843-M.jpg', 'CHO_DUYET', 'Đang chờ CSKH xác nhận đổi cuốn mới');
 
 INSERT INTO thong_bao (id, nguoi_dung_id, tieu_de, noi_dung, loai_thong_bao, da_doc) VALUES
-('tb_01', 'nd_kh01', 'Đơn hàng DH-202611-001 đã giao thành công', 'Cảm ơn bạn đã mua sắm tại Nhà Sách Tri Thức Việt!', 'ORDER', TRUE),
-('tb_02', NULL, 'Flash Sale Cuối Tuần Giảm Tới 25%', 'Hàng trăm đầu sách mới thuộc 12 danh mục đang được giảm giá sâu.', 'PROMO', FALSE),
-('tb_03', 'nd_kh03', 'Đơn hàng DH-202611-003 đang trên đường giao', 'Shipper sẽ liên hệ với bạn trong hôm nay.', 'ORDER', FALSE);
+('tb_01', 'nd_kh01', 'Đơn hàng DH-202611-001 đã giao thành công', 'Cảm ơn bạn đã mua sắm tại Nhà Sách Tri Thức Việt!', 'DON_HANG', TRUE),
+('tb_02', NULL, 'Flash Sale Cuối Tuần Giảm Tới 25%', 'Hàng trăm đầu sách mới thuộc 12 danh mục đang được giảm giá sâu.', 'KHUYEN_MAI', FALSE),
+('tb_03', 'nd_kh03', 'Đơn hàng DH-202611-003 đang trên đường giao', 'Shipper sẽ liên hệ với bạn trong hôm nay.', 'DON_HANG', FALSE);
