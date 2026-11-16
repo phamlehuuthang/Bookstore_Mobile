@@ -1,1 +1,7 @@
 node_modules/
+.github/
+.vscode/
+backend/.gradle/
+backend/build/
+.expo/
+dist/
