@@ -34,7 +34,7 @@ BookStore_Antigravity/
 ├── CAU_TRUC_DU_AN.md                   # Tài liệu tổng hợp cấu trúc toàn dự án (File này)
 │
 ├── database/                           # [PHÂN HỆ 1] CƠ SỞ DỮ LIỆU POSTGRESQL 16 + PGVECTOR (bookstore_db)
-│   ├── 01_schema.sql                   # Tạo extension vector & 17 bảng tiếng Việt không dấu + 6 index
+│   ├── 01_schema.sql                   # Tạo extension vector & 18 bảng tiếng Việt không dấu + 8 index
 │   └── 02_seed_data.sql                # Nạp 186 cuốn sách (12 danh mục, ảnh bìa khớp tên sách), 148 tác giả, 19 tài khoản...
 │
 ├── backend/                            # [PHÂN HỆ 2] MÁY CHỦ SPRING BOOT + GRADLE (JAVA 21)
@@ -51,8 +51,8 @@ BookStore_Antigravity/
 │       │   └── java/com/trithucviet/bookstore/
 │       │       ├── BookstoreApplication.java   # Điểm khởi chạy chính của Spring Boot
 │       │       ├── config/                     # Cấu hình CORS, Security, JWT Filter, AI ChatClient & Embedding
-│       │       ├── entity/                     # Ánh xạ 17 bảng tiếng Việt không dấu trong bookstore_db
-│       │       │   └── enums/                  # VaiTro, TrangThaiDon, LoaiGiam, PhuongThucThanhToan...
+│       │       ├── entity/                     # Ánh xạ 18 bảng tiếng Việt không dấu trong bookstore_db
+│       │       │   └── enums/                  # VaiTro, TrangThaiDon, LoaiGiam, PhuongThucThanhToan, LoaiHanhVi...
 │       │       ├── repository/                 # Giao tiếp PostgreSQL + truy vấn tương đồng vector (<=>)
 │       │       ├── dto/                        # Dữ liệu truyền nhận với Mobile & Web Admin
 │       │       │   ├── request/                # Dữ liệu đầu vào (Login, Đặt hàng, Thêm giỏ, Chat...)
@@ -178,7 +178,7 @@ Dự án chuẩn **Spring Boot + Gradle (Java 21)** khởi tạo theo cấu trú
 | Package / Thư mục | Nhiệm vụ cụ thể |
 | :--- | :--- |
 | `config/` | Cấu hình CORS (cho phép cổng `8081` và `5173`), `SecurityConfig` (`@EnableMethodSecurity`), bộ lọc JWT (`JwtAuthenticationFilter`, `JwtTokenProvider`) và cấu hình `ChatClient` + `EmbeddingModel` cho tư vấn viên. |
-| `entity/` & `entity/enums/` | Chứa các Enum (`VaiTro`, `TrangThaiDon`, `LoaiGiam`...) và 17 class `@Entity` ánh xạ trực tiếp vào 17 bảng tiếng Việt không dấu trong `bookstore_db`. |
+| `entity/` & `entity/enums/` | Chứa 8 Enum (`VaiTro`, `TrangThaiDon`, `LoaiGiam`, `LoaiHanhVi`...) và 18 class `@Entity` ánh xạ trực tiếp vào 18 bảng tiếng Việt không dấu trong `bookstore_db`. |
 | `repository/` | Các interface kế thừa `JpaRepository` để truy vấn PostgreSQL và thực hiện tìm kiếm tương đồng ngữ nghĩa bằng toán tử cosine `<=>` trên cột `sach.vector_ngu_nghia`. |
 | `dto/request/` & `dto/response/` | Tách biệt dữ liệu nhận vào và trả ra khỏi Entity (ẩn `mat_khau_ma_hoa`, ẩn mảng `vector(768)` và tránh vòng lặp JSON), đồng bộ cấu trúc với `shared/types` của Frontend. |
 | `service/` | Xử lý toàn bộ quy tắc nghiệp vụ và `@Transactional`: đăng nhập (chặn `CUSTOMER` vào Web Admin), đặt hàng (trừ `ton_kho`, tăng lượt dùng voucher), hủy đơn (hoàn kho), nhập kho (cộng dồn `ton_kho`), đánh giá, đổi trả và thống kê báo cáo. |
@@ -273,8 +273,8 @@ Khi giảng viên hỏi **1 thao tác bấm nút trên màn hình (hoặc khách
         │
         ▼ (Gọi hàm truy vấn qua Spring Data JPA / Native Vector Query)
 [Bước 4: Giao tiếp Dữ liệu (Repository & Entity)]
-  • repository/* (SachRepository, DonHangRepository...)
-  • entity/* (Ánh xạ 17 bảng tiếng Việt không dấu)
+  • repository/* (SachRepository, DonHangRepository, HanhViNguoiDungRepository...)
+  • entity/* (Ánh xạ 18 bảng tiếng Việt không dấu)
         │
         ▼ (Thực thi SQL & Toán tử tương đồng Cosine <=>)
 [Bước 5: Cơ sở dữ liệu PostgreSQL 16 + pgvector (Docker)]

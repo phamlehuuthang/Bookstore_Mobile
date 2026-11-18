@@ -98,20 +98,20 @@
 
 ## PHẦN III. TỔNG HỢP DANH SÁCH FILE CẦN CÓ TRONG TỪNG PACKAGE BACKEND
 
-1. **`entity/` (Đã hoàn thành 100%)**:
-   - `enums/`: `VaiTro`, `LoaiGiam`, `PhuongThucThanhToan`, `TrangThaiThanhToan`, `TrangThaiDon`, `TrangThaiDoiTra`, `LoaiThongBao`
-   - 17 class Entity: `TkNguoiDung`, `SoDiaChi`, `DanhMuc`, `TacGia`, `NhaXuatBan`, `Sach`, `SachYeuThich`, `GioHang`, `PhieuNhapKho`, `ChiTietPhieuNhap`, `MaGiamGia`, `DonHang`, `ChiTietDonHang`, `LichSuDonHang`, `DanhGia`, `YeuCauDoiTra`, `ThongBao`
-2. **`repository/` (17 interface tương ứng 17 bảng)**:
-   - `TkNguoiDungRepository`, `SoDiaChiRepository`, `DanhMucRepository`, `TacGiaRepository`, `NhaXuatBanRepository`, `SachRepository`, `SachYeuThichRepository`, `GioHangRepository`, `PhieuNhapKhoRepository`, `ChiTietPhieuNhapRepository`, `MaGiamGiaRepository`, `DonHangRepository`, `ChiTietDonHangRepository`, `LichSuDonHangRepository`, `DanhGiaRepository`, `YeuCauDoiTraRepository`, `ThongBaoRepository`
+1. **`entity/` (Đã hoàn thành 100% — 8 Enum & 18 class `@Entity`)**:
+   - `enums/` (8 file): `VaiTro`, `LoaiGiam`, `PhuongThucThanhToan`, `TrangThaiThanhToan`, `TrangThaiDon`, `TrangThaiDoiTra`, `LoaiThongBao`, `LoaiHanhVi`
+   - 18 class Entity: `TkNguoiDung`, `SoDiaChi`, `DanhMuc`, `TacGia`, `NhaXuatBan`, `Sach`, `SachYeuThich`, `HanhViNguoiDung`, `GioHang`, `PhieuNhapKho`, `ChiTietPhieuNhap`, `MaGiamGia`, `DonHang`, `ChiTietDonHang`, `LichSuDonHang`, `DanhGia`, `YeuCauDoiTra`, `ThongBao`
+2. **`repository/` (18 interface tương ứng 18 bảng)**:
+   - `TkNguoiDungRepository`, `SoDiaChiRepository`, `DanhMucRepository`, `TacGiaRepository`, `NhaXuatBanRepository`, `SachRepository`, `SachYeuThichRepository`, `HanhViNguoiDungRepository`, `GioHangRepository`, `PhieuNhapKhoRepository`, `ChiTietPhieuNhapRepository`, `MaGiamGiaRepository`, `DonHangRepository`, `ChiTietDonHangRepository`, `LichSuDonHangRepository`, `DanhGiaRepository`, `YeuCauDoiTraRepository`, `ThongBaoRepository`
 3. **`dto/request/` & `dto/response/`**:
-   - Request: `LoginRequest`, `RegisterRequest`, `UpdateProfileRequest`, `AddressUpsertRequest`, `BookFilterRequest`, `BookUpsertRequest`, `CategoryUpsertRequest`, `CartItemRequest`, `ApplyVoucherRequest`, `VoucherUpsertRequest`, `CreateOrderRequest`, `UpdateOrderStatusRequest`, `CreateInventoryReceiptRequest`, `CreateReviewRequest`, `CreateReturnRequest`, `ProcessReturnRequest`, `CreateStaffRequest`, `CreateNotificationRequest`, `ChatRequest`
-   - Response: `ApiResponse<T>`, `AuthResponse`, `UserDto`, `AddressDto`, `CategoryDto`, `BookDto`, `BookDetailDto`, `CartResponseDto`, `VoucherDto`, `OrderDto`, `InventoryReceiptDto`, `ReviewDto`, `ReturnRequestDto`, `NotificationDto`, `DashboardStatsDto`, `ChatResponse`
-4. **`service/` (9 file)**:
-   - `AuthService`, `BookService`, `CartWishlistService`, `OrderService`, `InventoryService`, `ReviewReturnService`, `VoucherService`, `UserAddressService`, `NotificationService`, `ReportService` (10 file)
+   - Request: `LoginRequest`, `RegisterRequest`, `UpdateProfileRequest`, `AddressUpsertRequest`, `BookFilterRequest`, `BookUpsertRequest`, `CategoryUpsertRequest`, `CartItemRequest`, `ApplyVoucherRequest`, `VoucherUpsertRequest`, `CreateOrderRequest`, `UpdateOrderStatusRequest`, `CreateInventoryReceiptRequest`, `CreateReviewRequest`, `CreateReturnRequest`, `ProcessReturnRequest`, `CreateStaffRequest`, `CreateNotificationRequest`, `TrackBehaviorRequest`, `ChatRequest`
+   - Response: `ApiResponse<T>`, `AuthResponse`, `UserDto`, `AddressDto`, `CategoryDto`, `BookDto`, `BookDetailDto`, `CartResponseDto`, `VoucherDto`, `OrderDto`, `InventoryReceiptDto`, `ReviewDto`, `ReturnRequestDto`, `NotificationDto`, `RecommendationResponse`, `DashboardStatsDto`, `ChatResponse`
+4. **`service/` (11 file)**:
+   - `AuthService`, `BookService`, `CartWishlistService`, `OrderService`, `InventoryService`, `ReviewReturnService`, `VoucherService`, `UserAddressService`, `NotificationService`, `RecommendationTrackingService`, `ReportService`
 5. **`ai/` (3 file)**:
    - `BookVectorService`, `BookstoreAiTools`, `AdvisorChatService`
-6. **`controller/client/` (10 file) & `controller/admin/` (7 file)**:
-   - Client: `ClientAuthController`, `ClientBookController`, `ClientCartController`, `ClientWishlistController`, `ClientAddressController`, `ClientVoucherController`, `ClientOrderController`, `ClientReviewReturnController`, `ClientNotificationController`, `ClientChatController`
+6. **`controller/client/` (11 file) & `controller/admin/` (7 file)**:
+   - Client: `ClientAuthController`, `ClientBookController`, `ClientCartController`, `ClientWishlistController`, `ClientAddressController`, `ClientVoucherController`, `ClientOrderController`, `ClientReviewReturnController`, `ClientNotificationController`, `ClientTrackingController`, `ClientChatController`
    - Admin: `AdminDashboardController`, `AdminBookCategoryController`, `AdminInventoryController`, `AdminOrderReturnController`, `AdminVoucherController`, `AdminUserController`, `AdminReviewNotifController`
 7. **`config/` (5 file) & `exception/` (2 file)**:
    - Config: `CorsConfig`, `SecurityConfig`, `JwtTokenProvider`, `JwtAuthenticationFilter`, `AiConfig`

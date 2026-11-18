@@ -50,7 +50,7 @@ File có hàm `main` và `@SpringBootApplication` – điểm khởi động to�
 | `JwtAuthenticationFilter.java` | Chạy **trước mọi request**: lấy header `Authorization: Bearer <token>` → nhờ `JwtTokenProvider` kiểm tra → nếu hợp lệ thì gắn thông tin người dùng vào `SecurityContext` để các tầng sau biết "ai đang gọi". |
 | `AiConfig.java` | Tạo `ChatClient` (model chat) và `EmbeddingModel` (model chuyển văn bản → vector 768 chiều), khai báo **System Prompt** cho tư vấn viên (VD: "Chỉ tư vấn sách có trong cửa hàng, luôn hỏi xác nhận trước khi đặt hàng, trả lời tiếng Việt"). |
 
-## 4. `entity/` – Ánh xạ 17 bảng CSDL
+## 4. `entity/` – Ánh xạ 18 bảng CSDL
 
 Mỗi class = 1 bảng trong `bookstore_db`, mỗi thuộc tính = 1 cột. Dùng `@Table(name = "...")`, `@Column(name = "...")` để khớp đúng tên tiếng Việt không dấu. Các quan hệ khóa ngoại thể hiện bằng `@ManyToOne` / `@OneToMany`.
 
@@ -86,11 +86,12 @@ Là các `interface` kế thừa `JpaRepository`. Spring tự sinh code cho các
 | File | Tác dụng |
 | :--- | :--- |
 | `SachRepository.java` | Tìm sách theo tên/tác giả, lọc theo danh mục, khoảng giá, sách sắp hết hàng (`ton_kho <= 5`), sách bán chạy, Flash Sale. Chứa câu **native query pgvector** dùng toán tử `<=>` (khoảng cách cosine) để lấy Top N sách gần nghĩa nhất với câu hỏi của khách. |
+| `HanhViNguoiDungRepository.java` | Truy vấn lịch sử hành vi của khách (`XEM_CHI_TIET` kèm `thoi_gian_xem_giay`, `THEM_YEU_THICH`, `THEM_GIO_HANG`, `MUA_HANG`, `BO_QUA_DE_XUAT`) theo `ngay_tao DESC` để tầng Service tính điểm sở thích đa chủ đề. |
 | `DonHangRepository.java` | Lọc đơn theo trạng thái/khách/khoảng ngày, tính tổng doanh thu, đếm đơn theo trạng thái cho Dashboard. |
 | `TkNguoiDungRepository.java` | Tìm tài khoản theo email (dùng khi đăng nhập), lọc theo vai trò, kiểm tra email đã tồn tại khi đăng ký. |
 | `GioHangRepository.java` | Lấy giỏ của 1 khách, lấy các dòng đã tick chọn, xóa các dòng sau khi đặt hàng. |
 | `MaGiamGiaRepository.java` | Tìm voucher theo mã, lấy các voucher còn hiệu lực. |
-| `...` | Mỗi Entity còn lại có 1 Repository tương ứng (`SoDiaChiRepository`, `DanhMucRepository`, `PhieuNhapKhoRepository`, `DanhGiaRepository`...). |
+| `...` | Mỗi Entity còn lại có 1 Repository tương ứng (`SoDiaChiRepository`, `DanhMucRepository`, `TacGiaRepository`, `NhaXuatBanRepository`, `SachYeuThichRepository`, `PhieuNhapKhoRepository`, `ChiTietPhieuNhapRepository`, `ChiTietDonHangRepository`, `LichSuDonHangRepository`, `DanhGiaRepository`, `YeuCauDoiTraRepository`, `ThongBaoRepository`). |
 
 ## 6. `dto/` – Dữ liệu truyền nhận
 
@@ -172,4 +173,4 @@ Mỗi hàm gắn `@PreAuthorize` theo đúng [PHAN_QUYEN_WEB_ADMIN.md](file:///e
 
 | File | Tác dụng |
 | :--- | :--- |
-| `BookstoreApplicationTests.java` | Kiểm tra ứng dụng khởi động được và mọi Entity khớp với 17 bảng trong `bookstore_db`. Có thể bổ sung test cho `OrderService` (trừ kho, áp voucher) vì đây là phần dễ sai nhất. |
+| `BookstoreApplicationTests.java` | Kiểm tra ứng dụng khởi động được và mọi Entity khớp với 18 bảng trong `bookstore_db`. Có thể bổ sung test cho `OrderService` (trừ kho, áp voucher) vì đây là phần dễ sai nhất. |
