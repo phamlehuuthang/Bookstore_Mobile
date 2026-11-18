@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Book, Category } from '@shared/types';
 import { colors } from '@/theme/colors';
@@ -27,11 +27,13 @@ import {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { totalItemsCount } = useCart();
-  const { user, notifications } = useAuth();
+  const { items: cartItems, totalItemsCount } = useCart();
+  const { user, wishlistBookIds, notifications } = useAuth();
   const { openChat } = useAiChat();
 
   const [books, setBooks] = useState<Book[]>([]);
+  const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
+  const [recommendReason, setRecommendReason] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -45,12 +47,19 @@ export default function HomeScreen() {
       else setIsLoading(true);
       setErrorMsg(null);
 
-      const [bookList, catList] = await Promise.all([
+      const excludeBookIds = [
+        ...wishlistBookIds,
+        ...cartItems.map((c) => c.book.id),
+      ];
+      const [bookList, catList, recData] = await Promise.all([
         bookService.getCatalogBooks({ sortBy: 'popular' }),
         bookService.getCategories(),
+        bookService.getPersonalizedRecommendations({ excludeBookIds }),
       ]);
       setBooks(bookList);
       setCategories(catList.filter((c) => c.parentId === null));
+      setRecommendedBooks(recData.books);
+      setRecommendReason(recData.reasonLabel);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Lỗi tải dữ liệu trang chủ');
     } finally {
@@ -62,6 +71,19 @@ export default function HomeScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const excludeBookIds = [
+        ...wishlistBookIds,
+        ...cartItems.map((c) => c.book.id),
+      ];
+      bookService.getPersonalizedRecommendations({ excludeBookIds }).then((recData) => {
+        setRecommendedBooks(recData.books);
+        setRecommendReason(recData.reasonLabel);
+      });
+    }, [wishlistBookIds, cartItems])
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -295,6 +317,35 @@ export default function HomeScreen() {
                     ))}
                   </ScrollView>
                 </View>
+
+                {/* Personalized Recommendations (User Tracking) */}
+                {recommendedBooks.length > 0 ? (
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sectionTitle}>Đề xuất dành riêng cho bạn</Text>
+                        {recommendReason ? (
+                          <Text style={{ fontSize: 11.5, color: colors.primary, fontWeight: '600', marginTop: 2 }}>
+                            {recommendReason}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Pressable onPress={() => router.push('/(tabs)/catalog')}>
+                        <Text style={styles.seeAllText}>Xem thêm</Text>
+                      </Pressable>
+                    </View>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}
+                    >
+                      {recommendedBooks.map((book) => (
+                        <BookCard key={`rec-${book.id}`} book={book} compact />
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
 
                 {/* Best Sellers Grid */}
                 <View style={styles.sectionHeader}>

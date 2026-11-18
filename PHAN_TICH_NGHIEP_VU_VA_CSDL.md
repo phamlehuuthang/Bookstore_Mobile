@@ -5,7 +5,7 @@
 ---
 
 ## MỤC LỤC NHANH
-1. [Tổng quan Danh sách 14 Bảng CSDL](#1-tổng-quan-danh-sách-14-bảng-csdl)
+1. [Tổng quan Danh sách 18 Bảng CSDL](#1-tổng-quan-danh-sách-18-bảng-csdl)
 2. [Sơ đồ Quan hệ Thực thể (ERD)](#2-sơ-đồ-quan-hệ-thực-thể-erd)
 3. [Chi tiết Cấu trúc Bảng & Quy tắc Nghiệp vụ từng Phân hệ](#3-chi-tiết-cấu-trúc-bảng--quy-tắc-nghiệp-vụ-từng-phân-hệ)
    - [Phân hệ 1: Tài khoản, Phân quyền & Sổ địa chỉ](#phân-hệ-1-tài-khoản-phân-quyền--sổ-địa-chỉ)
@@ -13,33 +13,35 @@
    - [Phân hệ 3: Quản lý Nhập Kho & Tồn Kho](#phân-hệ-3-quản-lý-nhập-kho--tồn-kho)
    - [Phân hệ 4: Giỏ hàng, Mã giảm giá (Voucher) & Đặt hàng](#phân-hệ-4-giỏ-hàng-mã-giảm-giá-voucher--đặt-hàng)
    - [Phân hệ 5: Hậu mãi — Đánh giá Sách & Đổi trả hàng](#phân-hệ-5-hậu-mãi--đánh-giá-sách--đổi-trả-hàng)
-   - [Phân hệ 6: Thông báo, Tư vấn & Cấu hình Cửa hàng](#phân-hệ-6-thông-báo-tư-vấn--cấu-hình-cửa-hàng)
+   - [Phân hệ 6: Thông báo, Tư vấn AI (pgvector) & Cấu hình Cửa hàng](#phân-hệ-6-thông-báo-tư-vấn-ai-pgvector--cấu-hình-cửa-hàng)
+   - [Phân hệ 7: Theo dõi Thói quen Người dùng (User Tracking) & Đề xuất Sách Cá nhân hóa](#phân-hệ-7-theo-dõi-thói-quen-người-dùng-user-tracking--đề-xuất-sách-cá-nhân-hóa)
 4. [Bảng Tổng hợp Công thức Tính toán trong Hệ thống](#4-bảng-tổng-hợp-công-thức-tính-toán-trong-hệ-thống)
 
 ---
 
-## 1. Tổng quan Danh sách 14 Bảng CSDL
+## 1. Tổng quan Danh sách 18 Bảng CSDL
 
-| STT | Tên Bảng (Table) | Tên Tiếng Việt | Phân hệ sử dụng | Quan hệ chính (Khóa ngoại) |
+| STT | Tên Bảng trong PostgreSQL (`01_schema.sql`) | Tên Tiếng Việt | Phân hệ sử dụng | Quan hệ chính (Khóa ngoại) |
 | :-: | :--- | :--- | :--- | :--- |
-| 1 | `users` | Người dùng & Nhân sự | Mobile & Web Admin | Bảng gốc |
-| 2 | `addresses` | Sổ địa chỉ nhận hàng | Mobile (Hồ sơ & Checkout) | `user_id` $\rightarrow$ `users.id` |
-| 3 | `categories` | Danh mục sách (Cha/Con) | Mobile & Web Admin | `parent_id` $\rightarrow$ `categories.id` |
-| 4 | `authors` | Tác giả | Mobile & Web Admin | Bảng gốc |
-| 5 | `publishers` | Nhà xuất bản | Mobile & Web Admin | Bảng gốc |
-| 6 | `books` | Thông tin Sách | Mobile & Web Admin | `category_id`, `author_id`, `publisher_id` |
-| 7 | `wishlists` | Sách yêu thích | Mobile (Tài khoản) | `user_id` $\rightarrow$ `users.id`, `book_id` $\rightarrow$ `books.id` |
-| 8 | `inventory_receipts` | Phiếu nhập kho | Web Admin (Quản lý Kho) | `created_by` $\rightarrow$ `users.id` |
-| 9 | `inventory_receipt_items` | Chi tiết phiếu nhập kho | Web Admin (Quản lý Kho) | `receipt_id`, `book_id` |
-| 10 | `cart_items` | Giỏ hàng | Mobile (Giỏ hàng) | `user_id` $\rightarrow$ `users.id`, `book_id` $\rightarrow$ `books.id` |
-| 11 | `vouchers` | Mã giảm giá | Mobile & Web Admin | Bảng gốc |
-| 12 | `orders` | Đơn đặt hàng | Mobile & Web Admin | `user_id` $\rightarrow$ `users.id`, `voucher_code` |
-| 13 | `order_items` | Chi tiết sách trong đơn | Mobile & Web Admin | `order_id` $\rightarrow$ `orders.id`, `book_id` $\rightarrow$ `books.id` |
-| 14 | `order_timelines` | Lịch sử vận chuyển | Mobile & Web Admin | `order_id` $\rightarrow$ `orders.id` |
-| 15 | `return_requests` | Yêu cầu đổi trả hàng | Mobile & Web Admin | `order_id` $\rightarrow$ `orders.id` (Quan hệ 1-1) |
-| 16 | `reviews` | Đánh giá & Nhận xét sách | Mobile & Web Admin | `book_id`, `user_id`, `order_id` |
-| 17 | `notifications` | Thông báo đẩy | Mobile & Web Admin | `user_id` $\rightarrow$ `users.id` (Nullable) |
-| 18 | `store_configs` | Cấu hình cửa hàng | Web Admin (Cấu hình) | Bảng 1 dòng duy nhất (Singleton) |
+| 1 | `tk_nguoi_dung` (`users`) | Tài khoản Người dùng & Nhân sự | Mobile & Web Admin | Bảng gốc |
+| 2 | `so_dia_chi` (`addresses`) | Sổ địa chỉ nhận hàng | Mobile (Hồ sơ & Checkout) | `nguoi_dung_id` $\rightarrow$ `tk_nguoi_dung.id` |
+| 3 | `danh_muc` (`categories`) | Danh mục sách (Cha/Con) | Mobile & Web Admin | `danh_muc_cha_id` $\rightarrow$ `danh_muc.id` |
+| 4 | `tac_gia` (`authors`) | Tác giả | Mobile & Web Admin | Bảng gốc |
+| 5 | `nha_xuat_ban` (`publishers`) | Nhà xuất bản | Mobile & Web Admin | Bảng gốc |
+| 6 | `sach` (`books`) | Thông tin Sách & Vector `pgvector` | Mobile & Web Admin | `danh_muc_id`, `tac_gia_id`, `nha_xuat_ban_id` |
+| 7 | `sach_yeu_thich` (`wishlists`) | Sách yêu thích | Mobile (Tài khoản) | `nguoi_dung_id` $\rightarrow$ `tk_nguoi_dung.id`, `sach_id` $\rightarrow$ `sach.id` |
+| 8 | `hanh_vi_nguoi_dung` | Theo dõi hành vi & Đề xuất sách | Mobile (User Tracking) | `nguoi_dung_id`, `sach_id`, `danh_muc_id` |
+| 9 | `phieu_nhap_kho` (`inventory_receipts`) | Phiếu nhập kho | Web Admin (Quản lý Kho) | Bảng gốc phiếu nhập |
+| 10 | `chi_tiet_phieu_nhap` (`inventory_receipt_items`) | Chi tiết phiếu nhập kho | Web Admin (Quản lý Kho) | `phieu_nhap_id`, `sach_id` |
+| 11 | `gio_hang` (`cart_items`) | Giỏ hàng | Mobile (Giỏ hàng) | `nguoi_dung_id`, `sach_id` |
+| 12 | `ma_giam_gia` (`vouchers`) | Mã giảm giá | Mobile & Web Admin | Bảng gốc |
+| 13 | `don_hang` (`orders`) | Đơn đặt hàng | Mobile & Web Admin | `nguoi_dung_id`, `ma_giam_gia_code` |
+| 14 | `chi_tiet_don_hang` (`order_items`) | Chi tiết sách trong đơn | Mobile & Web Admin | `don_hang_id`, `sach_id` |
+| 15 | `lich_su_don_hang` (`order_timelines`) | Lịch sử vận chuyển | Mobile & Web Admin | `don_hang_id` $\rightarrow$ `don_hang.id` |
+| 16 | `yeu_cau_doi_tra` (`return_requests`) | Yêu cầu đổi trả hàng | Mobile & Web Admin | `don_hang_id` $\rightarrow$ `don_hang.id` (Quan hệ 1-1) |
+| 17 | `danh_gia` (`reviews`) | Đánh giá & Nhận xét sách | Mobile & Web Admin | `sach_id`, `nguoi_dung_id`, `don_hang_id` |
+| 18 | `thong_bao` (`notifications`) | Thông báo đẩy | Mobile & Web Admin | `nguoi_dung_id` $\rightarrow$ `tk_nguoi_dung.id` (Nullable) |
+| *(Ẩn)* | `cau_hinh_cua_hang` (`store_configs`) | Cấu hình cửa hàng | Web Admin (Tạm comment) | Bảng 1 dòng duy nhất (Singleton) |
 
 ---
 
@@ -49,16 +51,19 @@
 erDiagram
     USERS ||--o{ ADDRESSES : "1 khách có nhiều địa chỉ"
     USERS ||--o{ WISHLISTS : "yêu thích"
+    USERS ||--o{ HANH_VI_NGUOI_DUNG : "theo dõi hành vi"
     USERS ||--o{ CART_ITEMS : "có trong giỏ"
     USERS ||--o{ ORDERS : "đặt mua"
     USERS ||--o{ REVIEWS : "đánh giá"
 
     CATEGORIES ||--o{ CATEGORIES : "parent_id (Danh mục Cha - Con)"
     CATEGORIES ||--o{ BOOKS : "thuộc danh mục"
+    CATEGORIES ||--o{ HANH_VI_NGUOI_DUNG : "tính điểm chủ đề"
     AUTHORS ||--o{ BOOKS : "viết bởi"
     PUBLISHERS ||--o{ BOOKS : "phát hành bởi"
 
     BOOKS ||--o{ WISHLISTS : "được yêu thích"
+    BOOKS ||--o{ HANH_VI_NGUOI_DUNG : "được xem / tương tác"
     BOOKS ||--o{ CART_ITEMS : "nằm trong giỏ"
     BOOKS ||--o{ ORDER_ITEMS : "nằm trong đơn"
     BOOKS ||--o{ REVIEWS : "nhận đánh giá"
@@ -308,12 +313,63 @@ erDiagram
 
 ---
 
-### PHÂN HỆ 6: Thông báo, Tư vấn & Cấu hình Cửa hàng
+### PHÂN HỆ 6: Thông báo, Tư vấn AI (pgvector) & Cấu hình Cửa hàng
 
-1. **Bảng `notifications` (Thông báo đẩy):**
-   - Các cột: `id` (PK), `user_id` (FK Nullable — nếu `NULL` là thông báo khuyến mãi gửi cho toàn bộ khách hàng), `title`, `message`, `type` (`'ORDER'` | `'PROMO'` | `'SYSTEM'`), `is_read` (`DEFAULT 0`), `created_at`.
-2. **Bảng `store_configs` (Cấu hình hệ thống cửa hàng):**
-   - Các cột: `id` (PK), `store_name`, `tagline`, `logo_url`, `hotline`, `support_email`, `headquarters_address`, `default_shipping_fee` (`25000`), `free_shipping_threshold` (`300000`), `low_stock_threshold` (`5`), `bank_name`, `bank_account_number`, `bank_account_holder`.
+#### A. Thiết kế Bảng Thông báo & Cấu hình
+1. **Bảng `thong_bao` (`notifications` — Thông báo đẩy):**
+   - Các cột: `id` (PK), `nguoi_dung_id` (FK Nullable — nếu `NULL` là thông báo khuyến mãi gửi cho toàn bộ khách hàng), `tieu_de`, `noi_dung`, `loai_thong_bao` (`'DON_HANG'` | `'KHUYEN_MAI'` | `'HE_THONG'`), `da_doc` (`DEFAULT FALSE`), `ngay_tao`.
+2. **Bảng `cau_hinh_cua_hang` (`store_configs` — tạm ẩn trong CSDL để bổ sung sau):**
+   - Các cột: `id` (PK), `ten_cua_hang`, `khau_hieu`, `logo_url`, `hotline`, `email_ho_tro`, `dia_chi_tru_so`, `phi_ship_mac_dinh` (`25000`), `mien_phi_ship_tu` (`300000`), `nguong_canh_bao_ton_kho` (`5`), `ngan_hang_ten`, `ngan_hang_so_tk`, `ngan_hang_chu_tk`.
+
+#### B. Kiến trúc Tư vấn viên AI đọc CSDL Vector (`pgvector`) & Tự đặt sách cho Khách hàng
+1. **Tại sao chỉ lưu cột `vector_ngu_nghia vector(768)` ở bảng `sach`?**
+   - Đối tượng trung tâm mà khách hàng cần tìm và mua là **Sách** (`sach`).
+   - Khi sinh vector 768 chiều (`BookVectorService`), hệ thống **ghép toàn bộ thông tin liên quan thành 1 chuỗi duy nhất** trước khi đưa vào Embedding Model:
+     > `"{tieu_de} | Tác giả: {ten_tac_gia} | Danh mục: {ten_danh_muc} | NXB: {ten_nxb} | Tóm tắt: {tom_tat_ngan} | Từ khóa: {tu_khoa}"`
+   - Nhờ vậy, chỉ cần 1 cột `sach.vector_ngu_nghia`, khi khách hỏi theo **tên tác giả**, **thể loại**, **mô tả cốt truyện mơ hồ** hay **nhu cầu học tập**, truy vấn tương đồng Cosine (`vector_ngu_nghia <=> :queryVector`) kết hợp `ILIKE` (*Hybrid Search*) đều tìm trúng đầu sách.
+2. **Cơ chế AI tự thêm vào giỏ & tự đặt sách theo yêu cầu của khách (Không cần thêm bảng mới):**
+   - Tư vấn viên AI **không tự viết SQL trực tiếp**, mà sử dụng cơ chế **Function Calling (`BookstoreAiTools`)** gọi vào các hàm nghiệp vụ chuẩn của tầng `service/`:
+     - **Tool 1 (`searchBooksBySemanticOrAuthor`)**: Tìm sách trong bảng `sach` (+ `tac_gia`, `danh_muc`) theo câu hỏi của khách, trả về giá bán và `ton_kho` thực tế.
+     - **Tool 2 (`getActiveVouchers` & `getDefaultAddress`)**: Tra cứu mã giảm giá đang mở trong `ma_giam_gia` và lấy địa chỉ nhận hàng mặc định (`mac_dinh = true`) của khách trong `so_dia_chi`.
+     - **Tool 3 (`addBookToCustomerCart`)**: Khi khách yêu cầu *"Thêm cuốn này vào giỏ giúp mình"*, Tool gọi `CartWishlistService` ghi trực tiếp vào bảng **`gio_hang`**.
+     - **Tool 4 (`placeOrderForCustomer`)**: Khi khách yêu cầu *"Đặt luôn cho mình 1 cuốn giao về địa chỉ mặc định"*, AI hiển thị tóm tắt đơn (Tên sách, số lượng, địa chỉ, tổng tiền) để khách xác nhận → gọi `OrderService` (`@Transactional`) ghi vào **`don_hang`**, **`chi_tiet_don_hang`**, **`lich_su_don_hang`** và trừ **`sach.ton_kho`** y hệt như khi khách tự bấm thanh toán.
+
+---
+
+### PHÂN HỆ 7: Theo dõi Thói quen Người dùng (`User Tracking`) & Đề xuất Sách Cá nhân hóa
+
+#### A. Thiết kế Bảng `hanh_vi_nguoi_dung`
+| Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa |
+| :--- | :--- | :--- | :--- |
+| `id` | `VARCHAR(50)` | `PRIMARY KEY` | Mã sự kiện hành vi (`hv_01`, `hv_02`...) |
+| `nguoi_dung_id` | `VARCHAR(50)` | `FK NOT NULL (tk_nguoi_dung.id)` | Người dùng thực hiện hành vi |
+| `sach_id` | `VARCHAR(50)` | `FK NULL (sach.id)` | Cuốn sách tương tác (`NULL` nếu ghi nhận ở mức danh mục) |
+| `danh_muc_id` | `VARCHAR(50)` | `FK NOT NULL (danh_muc.id)` | Chủ đề / Danh mục của cuốn sách |
+| `loai_hanh_vi` | `VARCHAR(30)` | `CHECK IN (...)` | `'XEM_CHI_TIET'`, `'TIM_KIEM'`, `'THEM_YEU_THICH'`, `'THEM_GIO_HANG'`, `'MUA_HANG'`, `'BO_QUA_DE_XUAT'` |
+| `thoi_gian_xem_giay` | `INT` | `DEFAULT 0, >= 0` | Thời gian người dùng dừng lại đọc chi tiết sách (*Dwell Time*) |
+| `trong_so_diem` | `INT` | `DEFAULT 1` | Điểm quy đổi theo mức độ quan tâm (`-1` đến `+10`) |
+| `ngay_tao` | `TIMESTAMP` | `DEFAULT NOW()` | Thời điểm phát sinh hành vi (dùng để tính độ suy giảm theo thời gian) |
+
+#### B. 4 Quy tắc Nghiệp vụ Đề xuất Thực tế (Chuẩn Thương mại Điện tử)
+1. **Quy tắc 7.1 — Trọng số điểm theo Hành vi & Thời gian dừng lại (*Dwell Time*):**
+   - Bấm vào trang Chi tiết sách nhưng thoát ra dưới `3 giây`: **Bỏ qua** (coi là bấm nhầm).
+   - `XEM_CHI_TIET` từ `3–4 giây`: **`+1 điểm`**.
+   - `XEM_CHI_TIET` từ `5–14 giây` (dừng lại đọc): **`+3 điểm`**.
+   - `XEM_CHI_TIET` từ `15 giây` trở lên (đọc kỹ mô tả/đánh giá): **`+5 điểm`**.
+   - `TIM_KIEM`: **`+2 điểm`** • `THEM_YEU_THICH` (Thả tim): **`+4 điểm`** • `THEM_GIO_HANG`: **`+6 điểm`** • `MUA_HANG`: **`+10 điểm`**.
+2. **Quy tắc 7.2 — Pha trộn Đa chủ đề (*Multi-Interest Mixing*), không khóa cứng 1 chủ đề:**
+   - Một người dùng có thể quan tâm nhiều thể loại cùng lúc. Kệ **"Đề xuất dành riêng cho bạn"** (6 cuốn trên Trang chủ) được phân bổ theo tỷ lệ điểm của **Top 3 chủ đề cao điểm nhất**:
+     - Chủ đề #1: tối đa **`3 cuốn`** (50%)
+     - Chủ đề #2: tối đa **`2 cuốn`** (35%)
+     - Chủ đề #3 (hoặc sách khám phá mới – *Exploration*): **`1 cuốn`** (15%)
+3. **Quy tắc 7.3 — Suy giảm điểm theo thời gian (*Exponential Time Decay*):**
+   - Đề xuất không tồn tại vĩnh viễn mà giảm dần theo tuổi của hành vi ($\Delta t$ tính bằng giờ):
+     - Chỉ dừng lại xem (`XEM_CHI_TIET`): Chu kỳ bán rã **48 giờ**, tự hết hạn (`0 điểm`) sau **7 ngày** nếu không xem lại.
+     - Thả tim (`THEM_YEU_THICH`) / Thêm giỏ (`THEM_GIO_HANG`): Chu kỳ bán rã **14 ngày** (tồn tại 2–4 tuần).
+     - Mua hàng (`MUA_HANG`): Chu kỳ bán rã **30 ngày** (tồn tại 1–3 tháng để gợi ý sách cùng tác giả/cùng bộ).
+4. **Quy tắc 7.4 — Loại trừ sách đã có (*Candidate Exclusion*) & Giảm điểm khi khách ngó lơ (*Impression Fatigue*):**
+   - **Loại trừ sách đã lưu/mua:** Khi khách đã **Mua**, **Bỏ giỏ** hoặc **Thả tim** cuốn sách $X$, cuốn $X$ được loại khỏi kệ Đề xuất (không gạ mua lại đúng cuốn đó), nhưng điểm chủ đề của cuốn $X$ tăng lên để hệ thống gợi ý **các cuốn sách KHÁC cùng chủ đề**.
+   - **Xử lý khi khách không đọc đề xuất (*Impression Fatigue*):** Nếu chủ đề $A$ đã được hiển thị trên kệ Đề xuất quá **3 lần liên tiếp** mà khách lướt qua không bấm vào đọc (`BO_QUA_DE_XUAT`), mỗi lần tiếp theo điểm của chủ đề $A$ bị giảm **20%** ($\times 0.8$) để nhường vị trí cho chủ đề mới. Nếu khách bấm vào xem lại chủ đề $A$, bộ đếm phạt sẽ reset về `0`.
 
 ---
 
@@ -321,9 +377,10 @@ erDiagram
 
 | Hạng mục tính | Công thức chuẩn áp dụng trong Code & CSDL |
 | :--- | :--- |
-| **1. Tạm tính (`subtotal`)** | $\sum (\text{Đơn giá hiệu lực của sách được chọn} \times \text{Số lượng})$ |
-| **2. Phí vận chuyển (`shipping_fee`)** | Nếu $\text{subtotal} \ge 300.000\text{ đ} \Rightarrow 0\text{ đ}$ (Freeship)<br>Nếu $\text{subtotal} < 300.000\text{ đ} \Rightarrow 25.000\text{ đ}$ |
-| **3. Giảm giá Voucher (`discount_amount`)** | • Nếu loại `'FIXED'`: $\text{discount\_value}$<br>• Nếu loại `'PERCENTAGE'`: $\min\left(\frac{\text{subtotal} \times \text{discount\_value}}{100}, \text{max\_discount\_amount}\right)$ |
-| **4. Tổng thanh toán (`total_amount`)** | $\max(0, \text{subtotal} + \text{shipping\_fee} - \text{discount\_amount})$ |
-| **5. Cảnh báo tồn kho (`low_stock`)** | $\text{books.stock} < \text{store\_configs.low\_stock\_threshold}\ (5\text{ cuốn})$ |
+| **1. Tạm tính (`tam_tinh`)** | $\sum (\text{Đơn giá hiệu lực của sách được chọn} \times \text{Số lượng})$ |
+| **2. Phí vận chuyển (`phi_van_chuyen`)** | Nếu $\text{tam\_tinh} \ge 300.000\text{ đ} \Rightarrow 0\text{ đ}$ (Freeship)<br>Nếu $\text{tam\_tinh} < 300.000\text{ đ} \Rightarrow 25.000\text{ đ}$ |
+| **3. Giảm giá Voucher (`tien_giam_gia`)** | • Nếu loại `'CO_DINH'`: $\text{gia\_tri\_giam}$<br>• Nếu loại `'PHAN_TRAM'`: $\min\left(\frac{\text{tam\_tinh} \times \text{gia\_tri\_giam}}{100}, \text{giam\_toi\_da}\right)$ |
+| **4. Tổng thanh toán (`tong_thanh_toan`)** | $\max(0, \text{tam\_tinh} + \text{phi\_van\_chuyen} - \text{tien\_giam\_gia})$ |
+| **5. Cảnh báo tồn kho (`ton_kho`)** | $\text{sach.ton\_kho} \le 5\text{ cuốn}$ |
+| **6. Điểm quan tâm Chủ đề (`Affinity Score`)** | $\text{Score}(C) = \left(\sum_{e \in C} \text{trong\_so\_diem}_e \times 0.5^{\frac{\Delta t_e}{T_{1/2}}} \times \text{RecencyBoost}_e\right) \times 0.8^{\max(0, \text{IgnoredCount}_C - 3)}$ |
 

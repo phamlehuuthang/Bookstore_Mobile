@@ -29,8 +29,8 @@ backend/
     │       │   ├── JwtAuthenticationFilter.java
     │       │   └── AiConfig.java             # Cấu hình ChatClient + EmbeddingModel + System Prompt Tư vấn viên
     │       │
-    │       ├── entity/                       # 2. ÁNH XẠ ĐỦ 17 BẢNG TIẾNG VIỆT TRONG bookstore_db
-    │       │   ├── enums/                    # VaiTro (ADMIN, WAREHOUSE_MANAGER, CSKH, CUSTOMER), TrangThaiDon, LoaiGiam...
+    │       ├── entity/                       # 2. ÁNH XẠ ĐỦ 18 BẢNG TIẾNG VIỆT TRONG bookstore_db
+    │       │   ├── enums/                    # VaiTro, TrangThaiDon, LoaiGiam, LoaiHanhVi...
     │       │   ├── TkNguoiDung.java          # @Table(name = "tk_nguoi_dung")
     │       │   ├── SoDiaChi.java             # @Table(name = "so_dia_chi")
     │       │   ├── DanhMuc.java              # @Table(name = "danh_muc")
@@ -38,6 +38,7 @@ backend/
     │       │   ├── NhaXuatBan.java           # @Table(name = "nha_xuat_ban")
     │       │   ├── Sach.java                 # @Table(name = "sach") - có vector_ngu_nghia vector(768)
     │       │   ├── SachYeuThich.java         # @Table(name = "sach_yeu_thich")
+    │       │   ├── HanhViNguoiDung.java      # @Table(name = "hanh_vi_nguoi_dung") - User Tracking & Dwell time
     │       │   ├── GioHang.java              # @Table(name = "gio_hang")
     │       │   ├── PhieuNhapKho.java         # @Table(name = "phieu_nhap_kho")
     │       │   ├── ChiTietPhieuNhap.java     # @Table(name = "chi_tiet_phieu_nhap")
@@ -72,6 +73,7 @@ backend/
     │       │   ├── VoucherService.java       # Kiểm tra điều kiện & CRUD ma_giam_gia
     │       │   ├── UserAddressService.java   # Quản lý so_dia_chi, danh sách khách hàng & nhân sự
     │       │   ├── NotificationService.java  # Gửi & đánh dấu đã đọc thong_bao
+    │       │   ├── RecommendationTrackingService.java # Ghi nhận hành vi (thời gian dừng xem sách) & gợi ý sách cùng chủ đề
     │       │   └── ReportService.java        # Thống kê Dashboard, xuất CSV
     │       │
     │       ├── ai/                           # 6. MODULE TƯ VẤN VIÊN & VECTOR
@@ -90,6 +92,7 @@ backend/
     │       │   │   ├── ClientOrderController.java
     │       │   │   ├── ClientReviewReturnController.java
     │       │   │   ├── ClientNotificationController.java
+    │       │   │   ├── ClientTrackingController.java      # Ghi nhận User Tracking & trả kệ "Đề xuất dành riêng cho bạn"
     │       │   │   └── ClientChatController.java
     │       │   │
     │       │   └── admin/                    # Web Admin (/api/admin/** - gắn @PreAuthorize theo PHAN_QUYEN_WEB_ADMIN.md)

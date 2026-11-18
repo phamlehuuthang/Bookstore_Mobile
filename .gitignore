@@ -5,3 +5,4 @@ backend/.gradle/
 backend/build/
 .expo/
 dist/
+hs_err_pid*.log

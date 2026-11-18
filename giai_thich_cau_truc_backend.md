@@ -64,6 +64,7 @@ Mỗi class = 1 bảng trong `bookstore_db`, mỗi thuộc tính = 1 cột. Dùn
 | `NhaXuatBan.java` | `nha_xuat_ban` | Thông tin nhà xuất bản. |
 | `Sach.java` | `sach` | Trung tâm hệ thống: giá bán, giá gốc, Flash Sale, tồn kho, đã bán, điểm đánh giá, ảnh bìa, mô tả và cột `vector_ngu_nghia` (`vector(768)`) phục vụ tìm kiếm theo ý nghĩa. |
 | `SachYeuThich.java` | `sach_yeu_thich` | Sách khách bấm "tim". Khóa chính ghép (`nguoi_dung_id`, `sach_id`). |
+| `HanhViNguoiDung.java` | `hanh_vi_nguoi_dung` | Ghi nhận thói quen người dùng (*User Tracking*): loại hành vi (`XEM_CHI_TIET`, `TIM_KIEM`, `THEM_YEU_THICH`, `THEM_GIO_HANG`, `MUA_HANG`, `BO_QUA_DE_XUAT`), thời gian dừng lại đọc sách (`thoi_gian_xem_giay`), trọng số điểm (`trong_so_diem`) và `ngay_tao` để tính độ suy giảm theo thời gian (*Time Decay*). |
 | `GioHang.java` | `gio_hang` | Sách trong giỏ, số lượng, đã tick chọn để thanh toán chưa. Khóa chính ghép. |
 | `PhieuNhapKho.java` | `phieu_nhap_kho` | Phiếu nhập: mã phiếu, nhà cung cấp, người tạo, tổng số lượng, tổng tiền. |
 | `ChiTietPhieuNhap.java` | `chi_tiet_phieu_nhap` | Từng dòng sách trong phiếu nhập (số lượng, giá nhập). |
@@ -115,6 +116,7 @@ Nơi chứa **toàn bộ quy tắc của cửa hàng**. Những thao tác sửa 
 | `VoucherService.java` | Kiểm tra mã có hợp lệ không (còn hạn, còn lượt, đủ đơn tối thiểu) và tính số tiền được giảm; CRUD voucher cho Admin. |
 | `UserAddressService.java` | Quản lý sổ địa chỉ (đảm bảo chỉ 1 địa chỉ mặc định), xem/khóa tài khoản khách, tạo/phân quyền nhân viên. |
 | `NotificationService.java` | Tạo thông báo (tự động khi đơn đổi trạng thái hoặc Admin/CSKH gửi thủ công), đánh dấu đã đọc. |
+| `RecommendationTrackingService.java` | Ghi nhận sự kiện `HanhViNguoiDung` (tự tính `trong_so_diem` từ `thoi_gian_xem_giay`), áp dụng **Suy giảm theo thời gian (Time Decay)**, **Phạt giảm điểm khi khách bỏ qua đề xuất > 3 lần (Impression Fatigue)**, **Loại trừ sách đã mua/bỏ giỏ/thả tim**, và **Pha trộn đa chủ đề (Multi-Interest Mixing 3:2:1)** để trả về kệ sách "Đề xuất dành riêng cho bạn". |
 | `ReportService.java` | Tính số liệu Dashboard (doanh thu, số đơn, sách bán chạy, sách sắp hết), dữ liệu biểu đồ, xuất file CSV. |
 
 ## 8. `ai/` – Module tư vấn viên & Vector
@@ -142,6 +144,7 @@ Controller chỉ làm 3 việc: nhận request → gọi Service → trả `ApiR
 | `ClientOrderController.java` | Đặt hàng, xem lịch sử đơn, chi tiết + timeline đơn, hủy đơn khi còn `PENDING`. |
 | `ClientReviewReturnController.java` | Gửi đánh giá cho đơn đã giao, gửi yêu cầu đổi trả. |
 | `ClientNotificationController.java` | Xem danh sách thông báo, đánh dấu đã đọc. |
+| `ClientTrackingController.java` | `POST /api/v1/tracking/event` (ghi nhận thời gian dừng xem sách / hành vi tương tác) và `GET /api/v1/books/recommendations` (lấy kệ sách "Đề xuất dành riêng cho bạn" trên Trang chủ). |
 | `ClientChatController.java` | `POST /api/v1/chat/ask` – cổng của hộp thoại tư vấn, gọi `AdvisorChatService`. |
 
 ### 9.2. `admin/` – Dành cho Web Admin (`/api/admin/**`)

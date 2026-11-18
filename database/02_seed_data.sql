@@ -484,3 +484,15 @@ INSERT INTO thong_bao (id, nguoi_dung_id, tieu_de, noi_dung, loai_thong_bao, da_
 ('tb_01', 'nd_kh01', 'Đơn hàng DH-202611-001 đã giao thành công', 'Cảm ơn bạn đã mua sắm tại Nhà Sách Tri Thức Việt!', 'DON_HANG', TRUE),
 ('tb_02', NULL, 'Flash Sale Cuối Tuần Giảm Tới 25%', 'Hàng trăm đầu sách mới thuộc 12 danh mục đang được giảm giá sâu.', 'KHUYEN_MAI', FALSE),
 ('tb_03', 'nd_kh03', 'Đơn hàng DH-202611-003 đang trên đường giao', 'Shipper sẽ liên hệ với bạn trong hôm nay.', 'DON_HANG', FALSE);
+
+
+-- 15. hanh_vi_nguoi_dung (Theo dõi thói quen xem sách & tương tác để đề xuất cá nhân hóa)
+INSERT INTO hanh_vi_nguoi_dung (id, nguoi_dung_id, sach_id, danh_muc_id, loai_hanh_vi, thoi_gian_xem_giay, trong_so_diem) VALUES
+('hv_01', 'nd_kh01', 'sach_001', (SELECT danh_muc_id FROM sach WHERE id = 'sach_001'), 'XEM_CHI_TIET', 42, 5),
+('hv_02', 'nd_kh01', 'sach_002', (SELECT danh_muc_id FROM sach WHERE id = 'sach_002'), 'THEM_GIO_HANG', 25, 6),
+('hv_03', 'nd_kh01', 'sach_003', (SELECT danh_muc_id FROM sach WHERE id = 'sach_003'), 'XEM_CHI_TIET', 18, 3),
+('hv_04', 'nd_kh02', 'sach_020', (SELECT danh_muc_id FROM sach WHERE id = 'sach_020'), 'XEM_CHI_TIET', 35, 5),
+('hv_05', 'nd_kh02', 'sach_021', (SELECT danh_muc_id FROM sach WHERE id = 'sach_021'), 'THEM_YEU_THICH', 15, 4),
+('hv_06', 'nd_kh03', 'sach_050', (SELECT danh_muc_id FROM sach WHERE id = 'sach_050'), 'XEM_CHI_TIET', 50, 5),
+('hv_07', 'nd_kh03', 'sach_051', (SELECT danh_muc_id FROM sach WHERE id = 'sach_051'), 'MUA_HANG', 30, 10),
+('hv_08', 'nd_kh04', 'sach_080', (SELECT danh_muc_id FROM sach WHERE id = 'sach_080'), 'XEM_CHI_TIET', 28, 3);

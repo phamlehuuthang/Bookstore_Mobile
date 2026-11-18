@@ -35,6 +35,10 @@ export default function BookDetailScreen() {
   const [voucherSavedToast, setVoucherSavedToast] = useState<string | null>(null);
 
   useEffect(() => {
+    let enterTime = Date.now();
+    let currentBook: Book | undefined;
+    let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+
     const load = async () => {
       if (!id) return;
       const [detail, revList] = await Promise.all([
@@ -43,8 +47,35 @@ export default function BookDetailScreen() {
       ]);
       setBook(detail);
       setReviews(revList);
+      currentBook = detail;
+      enterTime = Date.now();
+
+      if (detail) {
+        // Ghi nhận ngay nếu người dùng dừng lại trên trang từ 5 giây trở lên
+        dwellTimer = setTimeout(() => {
+          bookService.trackBookBehavior({
+            book: detail,
+            action: 'XEM_CHI_TIET',
+            dwellSeconds: 5,
+          });
+        }, 5000);
+      }
     };
     load();
+
+    return () => {
+      if (dwellTimer) clearTimeout(dwellTimer);
+      if (currentBook) {
+        const dwellSeconds = Math.round((Date.now() - enterTime) / 1000);
+        if (dwellSeconds >= 3) {
+          bookService.trackBookBehavior({
+            book: currentBook,
+            action: 'XEM_CHI_TIET',
+            dwellSeconds,
+          });
+        }
+      }
+    };
   }, [id]);
 
   if (!book) {
@@ -65,12 +96,14 @@ export default function BookDetailScreen() {
 
   const handleAddToCart = () => {
     addToCart(book, quantity);
+    bookService.trackBookBehavior({ book, action: 'THEM_GIO_HANG' });
     setAddedToast(true);
     setTimeout(() => setAddedToast(false), 2200);
   };
 
   const handleBuyNow = () => {
     addToCart(book, quantity);
+    bookService.trackBookBehavior({ book, action: 'MUA_HANG' });
     router.push('/checkout');
   };
 
@@ -112,7 +145,15 @@ export default function BookDetailScreen() {
             ) : null}
             <View style={{ flex: 1 }} />
             <Pressable
-              onPress={() => toggleWishlist(book.id)}
+              onPress={() => {
+                if (!isLiked) {
+                  bookService.trackBookBehavior({
+                    book,
+                    action: 'THEM_YEU_THICH',
+                  });
+                }
+                toggleWishlist(book.id);
+              }}
               hitSlop={10}
               style={styles.wishlistBtn}
             >

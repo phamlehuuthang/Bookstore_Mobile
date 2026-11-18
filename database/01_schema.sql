@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Dọn dẹp các bảng cũ (cả tên tiếng Anh trước đó và tên tiếng Việt mới) nếu chạy lại
 DROP TABLE IF EXISTS return_requests, reviews, order_timelines, order_items, orders, cart_items, wishlists, inventory_receipt_items, inventory_receipts, books, categories, authors, publishers, vouchers, addresses, notifications, users, store_configs CASCADE;
 
-DROP TABLE IF EXISTS yeu_cau_doi_tra, danh_gia, lich_su_don_hang, chi_tiet_don_hang, don_hang, gio_hang, sach_yeu_thich, chi_tiet_phieu_nhap, phieu_nhap_kho, sach, danh_muc, tac_gia, nha_xuat_ban, ma_giam_gia, so_dia_chi, thong_bao, nguoi_dung, tk_nguoi_dung, cau_hinh_cua_hang CASCADE;
+DROP TABLE IF EXISTS hanh_vi_nguoi_dung, yeu_cau_doi_tra, danh_gia, lich_su_don_hang, chi_tiet_don_hang, don_hang, gio_hang, sach_yeu_thich, chi_tiet_phieu_nhap, phieu_nhap_kho, sach, danh_muc, tac_gia, nha_xuat_ban, ma_giam_gia, so_dia_chi, thong_bao, nguoi_dung, tk_nguoi_dung, cau_hinh_cua_hang CASCADE;
 
 -- ============================================================================
 -- PHÂN HỆ 1: TÀI KHOẢN, PHÂN QUYỀN & SỔ ĐỊA CHỈ
@@ -103,6 +103,18 @@ CREATE TABLE sach_yeu_thich (
     sach_id VARCHAR(50) NOT NULL REFERENCES sach(id) ON DELETE CASCADE,
     ngay_tao TIMESTAMP NOT NULL DEFAULT NOW(),
     PRIMARY KEY (nguoi_dung_id, sach_id)
+);
+
+CREATE TABLE hanh_vi_nguoi_dung (
+    id VARCHAR(50) PRIMARY KEY,
+    nguoi_dung_id VARCHAR(50) NOT NULL REFERENCES tk_nguoi_dung(id) ON DELETE CASCADE,
+    sach_id VARCHAR(50) NULL REFERENCES sach(id) ON DELETE CASCADE,
+    danh_muc_id VARCHAR(50) NOT NULL REFERENCES danh_muc(id) ON DELETE CASCADE,
+    loai_hanh_vi VARCHAR(30) NOT NULL
+        CHECK (loai_hanh_vi IN ('XEM_CHI_TIET', 'TIM_KIEM', 'THEM_YEU_THICH', 'THEM_GIO_HANG', 'MUA_HANG', 'BO_QUA_DE_XUAT')),
+    thoi_gian_xem_giay INT NOT NULL DEFAULT 0 CHECK (thoi_gian_xem_giay >= 0),
+    trong_so_diem INT NOT NULL DEFAULT 1,
+    ngay_tao TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================================
@@ -264,3 +276,5 @@ CREATE INDEX idx_sach_ton_kho ON sach(ton_kho);
 CREATE INDEX idx_don_hang_nguoi_dung ON don_hang(nguoi_dung_id);
 CREATE INDEX idx_don_hang_trang_thai ON don_hang(trang_thai_don);
 CREATE INDEX idx_danh_gia_sach ON danh_gia(sach_id);
+CREATE INDEX idx_hanh_vi_nguoi_dung ON hanh_vi_nguoi_dung(nguoi_dung_id, ngay_tao DESC);
+CREATE INDEX idx_hanh_vi_danh_muc ON hanh_vi_nguoi_dung(nguoi_dung_id, danh_muc_id);
