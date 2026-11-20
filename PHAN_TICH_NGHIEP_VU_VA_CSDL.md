@@ -227,6 +227,7 @@ erDiagram
 | `discount_value`| `DECIMAL(12,0)` | `NOT NULL` | Số tiền giảm hoặc số % giảm |
 | `max_discount_amount` | `DECIMAL(12,0)` | `NULL` | Mức giảm tối đa khi giảm theo % |
 | `min_order_value` | `DECIMAL(12,0)` | `DEFAULT 0` | Đơn tối thiểu để áp dụng mã |
+| `danh_muc_id` | `VARCHAR(50)` | `FK (danh_muc.id), NULL` | `NULL`: áp dụng toàn cửa hàng; có giá trị: chỉ áp dụng cho sách thuộc danh mục này hoặc danh mục con |
 | `usage_limit` | `INT` | `NOT NULL` | Tổng số lượt phát hành |
 | `used_count` | `INT` | `DEFAULT 0` | Số lượt đã sử dụng |
 | `start_date` | `DATE` | `NOT NULL` | Ngày bắt đầu |

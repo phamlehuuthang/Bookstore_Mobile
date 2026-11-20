@@ -55,14 +55,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateQuantity = (bookId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(bookId);
-      return;
-    }
+    // Khóa số lượng tối thiểu ở mức 1 (muốn xóa phải bấm nút Thùng rác và xác nhận)
+    const clampedQty = Math.max(1, quantity);
     setItems((prev) =>
       prev.map((item) =>
         item.book.id === bookId
-          ? { ...item, quantity: Math.min(item.book.stock, quantity) }
+          ? { ...item, quantity: Math.min(item.book.stock, clampedQty) }
           : item
       )
     );

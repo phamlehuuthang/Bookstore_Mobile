@@ -5,7 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -39,6 +42,11 @@ public class MaGiamGia {
 
     @Column(name = "don_toi_thieu", precision = 12, scale = 0, nullable = false)
     private BigDecimal donToiThieu = BigDecimal.ZERO;
+
+    // NULL = áp dụng toàn cửa hàng; có giá trị = chỉ áp dụng cho sách thuộc danh mục này (hoặc danh mục con)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "danh_muc_id")
+    private DanhMuc danhMuc;
 
     @Column(name = "gioi_han_luot", nullable = false)
     private Integer gioiHanLuot;
@@ -120,6 +128,14 @@ public class MaGiamGia {
 
     public void setDonToiThieu(BigDecimal donToiThieu) {
         this.donToiThieu = donToiThieu;
+    }
+
+    public DanhMuc getDanhMuc() {
+        return danhMuc;
+    }
+
+    public void setDanhMuc(DanhMuc danhMuc) {
+        this.danhMuc = danhMuc;
     }
 
     public Integer getGioiHanLuot() {

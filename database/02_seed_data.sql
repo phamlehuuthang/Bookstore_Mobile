@@ -403,13 +403,13 @@ INSERT INTO sach (id, ma_isbn, tieu_de, duong_dan, danh_muc_id, ten_danh_muc_con
 ('sach_185', '9786041025345', 'Narrative of the life of Frederick Douglass', 'narrative-of-the-life-of-frederick-douglass-sach_185', 'dm_ngoai_ngu', 'Ngoại ngữ & Học thuật', 'tg_148', 'nxb_tre', 212000, 250000, FALSE, NULL, 71, 444, 4.99, 41, 482, 1845, 'Bìa cứng', 'https://covers.openlibrary.org/b/id/8247724-L.jpg', 'https://covers.openlibrary.org/b/id/8247724-L.jpg', 'Cuốn sách ''Narrative of the life of Frederick Douglass'' của tác giả Frederick Douglass thuộc chủ đề Ngoại ngữ & Học thuật, được độc giả đánh giá cao.', 'Tác phẩm ''Narrative of the life of Frederick Douglass'' do Frederick Douglass chắp bút mang đến góc nhìn sâu sắc và thực tiễn trong lĩnh vực Ngoại ngữ & Học thuật. Ấn bản chất lượng cao, trình bày rõ ràng, phù hợp cho cả người mới bắt đầu lẫn độc giả chuyên sâu.', 'ngoai-ngu-hoc-thuat, frederick douglass, sach-hay', TRUE, TRUE),
 ('sach_186', '9786041025482', 'Troilus and Cressida', 'troilus-and-cressida-sach_186', 'dm_ngoai_ngu', 'Ngoại ngữ & Học thuật', 'tg_004', 'nxb_nha_nam', 104000, 130000, FALSE, NULL, 73, 278, 4.23, 155, 453, 2008, 'Bìa mềm', 'https://covers.openlibrary.org/b/id/8789523-L.jpg', 'https://covers.openlibrary.org/b/id/8789523-L.jpg', 'Cuốn sách ''Troilus and Cressida'' của tác giả William Shakespeare thuộc chủ đề Ngoại ngữ & Học thuật, được độc giả đánh giá cao.', 'Tác phẩm ''Troilus and Cressida'' do William Shakespeare chắp bút mang đến góc nhìn sâu sắc và thực tiễn trong lĩnh vực Ngoại ngữ & Học thuật. Ấn bản chất lượng cao, trình bày rõ ràng, phù hợp cho cả người mới bắt đầu lẫn độc giả chuyên sâu.', 'ngoai-ngu-hoc-thuat, william shakespeare, sach-hay', FALSE, TRUE);
 
-INSERT INTO ma_giam_gia (id, ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, gioi_han_luot, da_su_dung, ngay_bat_dau, ngay_ket_thuc, dang_hoat_dong) VALUES
-('mgg_01', 'CHAOBAN20', 'Giảm 20.000đ cho bạn mới', 'Áp dụng cho đơn hàng đầu tiên từ 150.000đ', 'CO_DINH', 20000, NULL, 150000, 500, 120, '2026-01-01', '2026-12-31', TRUE),
-('mgg_02', 'SACHHAY15', 'Giảm 15% tối đa 50.000đ', 'Áp dụng cho toàn bộ sách trong cửa hàng', 'PHAN_TRAM', 15, 50000, 200000, 1000, 340, '2026-01-01', '2026-12-31', TRUE),
-('mgg_03', 'FREESHIP30', 'Hỗ trợ phí ship 30.000đ', 'Dành cho đơn hàng từ 250.000đ', 'CO_DINH', 30000, NULL, 250000, 800, 210, '2026-06-01', '2026-12-31', TRUE),
-('mgg_04', 'CONGNGHE25', 'Giảm 25% sách Công nghệ', 'Tối đa 80.000đ cho đơn từ 350.000đ', 'PHAN_TRAM', 25, 80000, 350000, 300, 85, '2026-06-01', '2026-12-31', TRUE),
-('mgg_05', 'VIP100K', 'Ưu đãi thành viên VIP 100.000đ', 'Áp dụng cho đơn hàng từ 700.000đ', 'CO_DINH', 100000, NULL, 700000, 100, 22, '2026-01-01', '2026-12-31', TRUE),
-('mgg_06', 'HETHAN10', 'Mã khuyến mãi cũ đã hết hạn', 'Chương trình tháng 5 đã kết thúc', 'PHAN_TRAM', 10, 30000, 100000, 200, 200, '2026-05-01', '2026-05-31', FALSE);
+INSERT INTO ma_giam_gia (id, ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, danh_muc_id, gioi_han_luot, da_su_dung, ngay_bat_dau, ngay_ket_thuc, dang_hoat_dong) VALUES
+('mgg_01', 'CHAOBAN20', 'Giảm 20.000đ cho bạn mới', 'Áp dụng cho đơn hàng đầu tiên từ 150.000đ', 'CO_DINH', 20000, NULL, 150000, NULL, 500, 120, '2026-01-01', '2026-12-31', TRUE),
+('mgg_02', 'SACHHAY15', 'Giảm 15% tối đa 50.000đ', 'Áp dụng cho toàn bộ sách trong cửa hàng', 'PHAN_TRAM', 15, 50000, 200000, NULL, 1000, 340, '2026-01-01', '2026-12-31', TRUE),
+('mgg_03', 'FREESHIP30', 'Hỗ trợ phí ship 30.000đ', 'Dành cho đơn hàng từ 250.000đ', 'CO_DINH', 30000, NULL, 250000, NULL, 800, 210, '2026-06-01', '2026-12-31', TRUE),
+('mgg_04', 'CONGNGHE25', 'Giảm 25% sách Công nghệ', 'Tối đa 80.000đ cho đơn sách Công nghệ từ 350.000đ', 'PHAN_TRAM', 25, 80000, 350000, 'dm_cong_nghe', 300, 85, '2026-06-01', '2026-12-31', TRUE),
+('mgg_05', 'VIP100K', 'Ưu đãi thành viên VIP 100.000đ', 'Áp dụng cho đơn hàng từ 700.000đ', 'CO_DINH', 100000, NULL, 700000, NULL, 100, 22, '2026-01-01', '2026-12-31', TRUE),
+('mgg_06', 'HETHAN10', 'Mã khuyến mãi cũ đã hết hạn', 'Chương trình tháng 5 đã kết thúc', 'PHAN_TRAM', 10, 30000, 100000, NULL, 200, 200, '2026-05-01', '2026-05-31', FALSE);
 
 INSERT INTO phieu_nhap_kho (id, ma_phieu, ten_nha_cung_cap, nguoi_tao, ghi_chu, tong_so_luong, tong_tien_nhap) VALUES
 ('pnk_01', 'PNK-202611-001', 'Công ty Phát hành Sách Fahasa', 'Trần Quốc Đạt', 'Nhập bổ sung sách Văn học & Kỹ năng', 150, 14500000),
@@ -437,7 +437,7 @@ INSERT INTO chi_tiet_don_hang (id, don_hang_id, sach_id, tieu_de_sach, anh_bia_u
 ('ctdh_02', 'dh_02', 'sach_002', 'A Christmas Carol', 'https://covers.openlibrary.org/b/id/12875748-L.jpg', 'Charles Dickens', 128000, 2),
 ('ctdh_03', 'dh_03', 'sach_003', 'Wuthering Heights', 'https://covers.openlibrary.org/b/id/12818862-L.jpg', 'Emily BronteÌ', 240000, 2),
 ('ctdh_04', 'dh_04', 'sach_004', 'Hamlet', 'https://covers.openlibrary.org/b/id/8281954-L.jpg', 'William Shakespeare', 387000, 2),
-('ctdh_05', 'dh_05', 'sach_005', 'Robinson Crusoe', 'https://covers.openlibrary.org/b/id/368541-L.jpg', 'Daniel Defoe', 230000, 2),
+('ctdh_05', 'dh_05', 'sach_113', 'Software Engineering', 'https://covers.openlibrary.org/b/id/66176-L.jpg', 'Roger S. Pressman', 255000, 2),
 ('ctdh_06', 'dh_06', 'sach_006', 'Emma', 'https://covers.openlibrary.org/b/id/9278312-L.jpg', 'Jane Austen', 136000, 2),
 ('ctdh_07', 'dh_07', 'sach_007', 'Sense and Sensibility', 'https://covers.openlibrary.org/b/id/9278292-L.jpg', 'Jane Austen', 345000, 2),
 ('ctdh_08', 'dh_08', 'sach_008', 'A Tale of Two Cities', 'https://covers.openlibrary.org/b/id/13301713-L.jpg', 'Charles Dickens', 315000, 2);
