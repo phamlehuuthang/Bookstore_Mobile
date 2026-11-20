@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -39,6 +40,11 @@ export default function CartScreen() {
   } = useCart();
 
   const [voucherInput, setVoucherInput] = useState(appliedVoucher?.code || '');
+  // Lưu sách chuẩn bị xóa để mở hộp thoại hỏi xác nhận trước khi xóa khỏi giỏ
+  const [pendingDeleteBook, setPendingDeleteBook] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
 
   const allSelected = items.length > 0 && items.every((i) => i.selected);
 
@@ -118,10 +124,15 @@ export default function CartScreen() {
                   <View style={styles.controlsRow}>
                     <View style={styles.stepper}>
                       <Pressable
+                        disabled={quantity <= 1}
                         onPress={() => updateQuantity(book.id, quantity - 1)}
-                        style={styles.stepBtn}
+                        style={[styles.stepBtn, quantity <= 1 && styles.stepBtnDisabled]}
                       >
-                        <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                        <Ionicons
+                          name="remove"
+                          size={16}
+                          color={quantity <= 1 ? colors.textMuted : colors.textPrimary}
+                        />
                       </Pressable>
                       <Text style={styles.stepValue}>{quantity}</Text>
                       <Pressable
@@ -133,7 +144,7 @@ export default function CartScreen() {
                     </View>
 
                     <Pressable
-                      onPress={() => removeFromCart(book.id)}
+                      onPress={() => setPendingDeleteBook({ id: book.id, title: book.title })}
                       hitSlop={8}
                       style={styles.deleteBtn}
                     >
@@ -274,6 +285,49 @@ export default function CartScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Hộp thoại xác nhận trước khi xóa hẳn sách khỏi giỏ hàng */}
+      <Modal
+        visible={pendingDeleteBook !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingDeleteBook(null)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconCircle}>
+              <Ionicons name="trash-outline" size={24} color={colors.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>Xóa sách khỏi giỏ hàng?</Text>
+            <Text style={styles.confirmDesc}>
+              Bạn có chắc chắn muốn xóa cuốn{' '}
+              <Text style={styles.confirmBookName}>
+                "{pendingDeleteBook?.title}"
+              </Text>{' '}
+              khỏi giỏ hàng không?
+            </Text>
+            <View style={styles.confirmActions}>
+              <Pressable
+                onPress={() => setPendingDeleteBook(null)}
+                style={styles.confirmCancelBtn}
+              >
+                <Text style={styles.confirmCancelText}>Hủy</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (pendingDeleteBook) {
+                    removeFromCart(pendingDeleteBook.id);
+                  }
+                  setPendingDeleteBook(null);
+                }}
+                style={styles.confirmDeleteBtn}
+              >
+                <Text style={styles.confirmDeleteText}>Xóa</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -548,6 +602,85 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+  },
+  stepBtnDisabled: {
+    opacity: 0.35,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  confirmIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.dangerBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  confirmDesc: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  confirmBookName: {
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    marginTop: 6,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 
