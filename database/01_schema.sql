@@ -162,6 +162,8 @@ CREATE TABLE ma_giam_gia (
     gia_tri_giam DECIMAL(12, 0) NOT NULL,
     giam_toi_da DECIMAL(12, 0),
     don_toi_thieu DECIMAL(12, 0) NOT NULL DEFAULT 0,
+    -- NULL = áp dụng toàn cửa hàng; có giá trị = chỉ áp dụng cho sách thuộc danh mục đó hoặc danh mục con
+    danh_muc_id VARCHAR(50) NULL REFERENCES danh_muc(id) ON DELETE SET NULL,
     gioi_han_luot INT NOT NULL,
     da_su_dung INT NOT NULL DEFAULT 0,
     ngay_bat_dau DATE NOT NULL,
