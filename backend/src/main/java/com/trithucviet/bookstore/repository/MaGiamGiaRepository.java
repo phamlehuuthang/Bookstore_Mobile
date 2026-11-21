@@ -38,4 +38,31 @@ public interface MaGiamGiaRepository extends JpaRepository<MaGiamGia, String> {
             order by m.donToiThieu asc, m.id asc
             """)
     List<MaGiamGia> findActiveVouchers(@Param("homNay") LocalDate homNay);
+
+    /**
+     * Lấy toàn bộ voucher cho Web Admin (kể cả mã tạm ngưng hoặc đã hết hạn),
+     * ưu tiên các mã đang bật lên đầu danh sách.
+     */
+    @Query("""
+            select m from MaGiamGia m
+            left join fetch m.danhMuc
+            order by m.dangHoatDong desc, m.ngayKetThuc desc, m.id asc
+            """)
+    List<MaGiamGia> findAllWithDanhMuc();
+
+    // Lấy chi tiết 1 voucher theo id kèm danhMuc áp dụng (dùng cho Admin/CSKH xem & sửa)
+    @Query("""
+            select m from MaGiamGia m
+            left join fetch m.danhMuc
+            where m.id = :id
+            """)
+    Optional<MaGiamGia> findByIdWithDanhMuc(@Param("id") String id);
+
+    // Kiểm tra trùng mã code khi ADMIN phát hành voucher mới (không phân biệt hoa/thường)
+    @Query("select count(m) > 0 from MaGiamGia m where upper(m.maCode) = upper(:maCode)")
+    boolean existsByMaCodeIgnoreCase(@Param("maCode") String maCode);
+
+    // Kiểm tra trùng mã code khi ADMIN cập nhật voucher (bỏ qua chính bản ghi đang sửa)
+    @Query("select count(m) > 0 from MaGiamGia m where upper(m.maCode) = upper(:maCode) and m.id <> :id")
+    boolean existsByMaCodeIgnoreCaseAndIdNot(@Param("maCode") String maCode, @Param("id") String id);
 }
