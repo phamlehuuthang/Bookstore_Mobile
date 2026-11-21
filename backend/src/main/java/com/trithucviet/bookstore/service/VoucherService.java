@@ -1,6 +1,7 @@
 package com.trithucviet.bookstore.service;
 
 import com.trithucviet.bookstore.dto.request.ApplyVoucherRequest;
+import com.trithucviet.bookstore.dto.request.VoucherUpsertRequest;
 import com.trithucviet.bookstore.dto.response.VoucherDto;
 import com.trithucviet.bookstore.dto.response.VoucherValidationResponse;
 import com.trithucviet.bookstore.entity.DanhMuc;
@@ -21,13 +22,15 @@ import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Nghiệp vụ Mã giảm giá Voucher (Bước 4 - phần 2 / Mục 5.2 phía Mobile).
- * Kiểm tra đầy đủ trạng thái bật/tắt, ngày hiệu lực, lượt dùng, ràng buộc danh mục (cha–con) và đơn tối thiểu.
+ * Nghiệp vụ Mã giảm giá Voucher cho cả Mobile (Mục 5.2) và Web Admin (Bước 4 - phần 3).
+ * - Mobile: lọc mã đang mở, kiểm tra điều kiện áp dụng, ràng buộc danh mục cha–con và tính tiền giảm.
+ * - Web Admin: xem/lọc toàn bộ mã, tạo mới, cập nhật (khóa đổi mã đã có lượt dùng để bảo toàn lịch sử đơn), bật/tắt.
  */
 @Service
 public class VoucherService {
@@ -180,6 +183,164 @@ public class VoucherService {
                 tienGiamGia,
                 tongThanhToanDuKien
         );
+    }
+
+    // =========================================================================
+    // PHẦN 3: QUẢN LÝ VOUCHER PHÍA WEB ADMIN (ADMIN & CSKH)
+    // =========================================================================
+
+    /**
+     * Lấy danh sách toàn bộ voucher cho Web Admin (kể cả mã đang tạm tắt hoặc đã hết hạn).
+     * Thực hiện lọc dangHoatDong/keyword trên Java sau khi tải danh sách (bảng ma_giam_gia ít dòng)
+     * để tránh lỗi PostgreSQL không suy luận được kiểu tham số khi truyền null vào JPQL.
+     */
+    @Transactional(readOnly = true)
+    public List<VoucherDto> getAdminVouchers(Boolean dangHoatDong, String keyword) {
+        String normalizedKeyword = (keyword == null || keyword.isBlank())
+                ? null
+                : keyword.trim().toLowerCase(Locale.ROOT);
+
+        return maGiamGiaRepository.findAllWithDanhMuc()
+                .stream()
+                .filter(v -> dangHoatDong == null || Boolean.valueOf(Boolean.TRUE.equals(v.getDangHoatDong())).equals(dangHoatDong))
+                .filter(v -> normalizedKeyword == null
+                        || v.getMaCode().toLowerCase(Locale.ROOT).contains(normalizedKeyword)
+                        || v.getTieuDe().toLowerCase(Locale.ROOT).contains(normalizedKeyword))
+                .map(this::toVoucherDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public VoucherDto getVoucherById(String id) {
+        MaGiamGia voucher = maGiamGiaRepository.findByIdWithDanhMuc(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy mã giảm giá có id " + id + "."));
+        return toVoucherDto(voucher);
+    }
+
+    /**
+     * Tạo voucher mới (chỉ ADMIN): chuẩn hóa mã code in hoa, kiểm tra trùng mã, phần trăm 1..100, ngày hợp lệ.
+     */
+    @Transactional
+    public VoucherDto createVoucher(VoucherUpsertRequest request) {
+        String maCode = request.maCode().trim().toUpperCase(Locale.ROOT);
+        if (maGiamGiaRepository.existsByMaCodeIgnoreCase(maCode)) {
+            throw new BusinessException("Mã giảm giá " + maCode + " đã tồn tại trong hệ thống.");
+        }
+
+        LocalDate ngayBatDau = request.ngayBatDau() != null ? request.ngayBatDau() : LocalDate.now();
+        validateVoucherForm(request, ngayBatDau);
+        DanhMuc danhMuc = resolveOptionalDanhMuc(request.danhMucId());
+
+        MaGiamGia voucher = new MaGiamGia();
+        voucher.setId("mgg_" + UUID.randomUUID().toString().substring(0, 8));
+        voucher.setDaSuDung(0);
+        boolean dangHoatDong = request.dangHoatDong() == null || Boolean.TRUE.equals(request.dangHoatDong());
+        applyVoucherFields(voucher, maCode, request, ngayBatDau, danhMuc, dangHoatDong);
+
+        maGiamGiaRepository.saveAndFlush(voucher);
+        return toVoucherDto(voucher);
+    }
+
+    /**
+     * Cập nhật voucher (chỉ ADMIN):
+     * - Chặn đổi maCode nếu voucher đã phát sinh lượt sử dụng (daSuDung > 0) để bảo vệ khóa ngoại
+     *   don_hang.ma_giam_gia_code đang tham chiếu sang ma_giam_gia(ma_code).
+     * - Chặn hạ gioiHanLuot xuống thấp hơn số lượt đã dùng (daSuDung).
+     */
+    @Transactional
+    public VoucherDto updateVoucher(String id, VoucherUpsertRequest request) {
+        MaGiamGia voucher = maGiamGiaRepository.findByIdWithDanhMuc(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy mã giảm giá có id " + id + "."));
+
+        String maCodeMoi = request.maCode().trim().toUpperCase(Locale.ROOT);
+        if (!maCodeMoi.equalsIgnoreCase(voucher.getMaCode()) && voucher.getDaSuDung() > 0) {
+            throw new BusinessException(
+                    "Không thể đổi mã code của voucher đã có đơn hàng sử dụng. Hãy tạo mã mới hoặc tạm ngưng mã này."
+            );
+        }
+        if (maGiamGiaRepository.existsByMaCodeIgnoreCaseAndIdNot(maCodeMoi, id)) {
+            throw new BusinessException("Mã giảm giá " + maCodeMoi + " đã tồn tại trong hệ thống.");
+        }
+        if (request.gioiHanLuot() < voucher.getDaSuDung()) {
+            throw new BusinessException(
+                    "Giới hạn lượt dùng (" + request.gioiHanLuot()
+                            + ") không được nhỏ hơn số lượt đã sử dụng (" + voucher.getDaSuDung() + ")."
+            );
+        }
+
+        LocalDate ngayBatDau = request.ngayBatDau() != null ? request.ngayBatDau() : voucher.getNgayBatDau();
+        validateVoucherForm(request, ngayBatDau);
+        DanhMuc danhMuc = resolveOptionalDanhMuc(request.danhMucId());
+        boolean dangHoatDong = request.dangHoatDong() != null
+                ? Boolean.TRUE.equals(request.dangHoatDong())
+                : Boolean.TRUE.equals(voucher.getDangHoatDong());
+
+        applyVoucherFields(voucher, maCodeMoi, request, ngayBatDau, danhMuc, dangHoatDong);
+        maGiamGiaRepository.saveAndFlush(voucher);
+        return toVoucherDto(voucher);
+    }
+
+    /**
+     * Bật/tắt nhanh trạng thái kích hoạt của voucher (thay cho xóa cứng để giữ lịch sử đơn hàng).
+     */
+    @Transactional
+    public VoucherDto toggleVoucherActive(String id) {
+        MaGiamGia voucher = maGiamGiaRepository.findByIdWithDanhMuc(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy mã giảm giá có id " + id + "."));
+        voucher.setDangHoatDong(!Boolean.TRUE.equals(voucher.getDangHoatDong()));
+        maGiamGiaRepository.saveAndFlush(voucher);
+        return toVoucherDto(voucher);
+    }
+
+    private void validateVoucherForm(VoucherUpsertRequest request, LocalDate ngayBatDau) {
+        if (request.loaiGiam() == LoaiGiam.PHAN_TRAM
+                && (request.giaTriGiam().compareTo(BigDecimal.ONE) < 0
+                || request.giaTriGiam().compareTo(ONE_HUNDRED) > 0)) {
+            throw new BusinessException("Với loại giảm theo phần trăm, giá trị giảm phải nằm trong khoảng từ 1 đến 100.");
+        }
+        if (request.ngayKetThuc().isBefore(ngayBatDau)) {
+            throw new BusinessException("Ngày kết thúc không được trước ngày bắt đầu.");
+        }
+    }
+
+    private DanhMuc resolveOptionalDanhMuc(String danhMucId) {
+        if (danhMucId == null || danhMucId.isBlank()) {
+            return null;
+        }
+        String trimmedId = danhMucId.trim();
+        return danhMucRepository.findById(trimmedId)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy danh mục có mã " + trimmedId + "."
+                ));
+    }
+
+    private void applyVoucherFields(
+            MaGiamGia voucher,
+            String maCode,
+            VoucherUpsertRequest request,
+            LocalDate ngayBatDau,
+            DanhMuc danhMuc,
+            boolean dangHoatDong
+    ) {
+        voucher.setMaCode(maCode);
+        voucher.setTieuDe(request.tieuDe().trim());
+        voucher.setMoTa(request.moTa() != null && !request.moTa().isBlank() ? request.moTa().trim() : null);
+        voucher.setLoaiGiam(request.loaiGiam());
+        voucher.setGiaTriGiam(request.giaTriGiam());
+        // Chỉ lưu mức giảm tối đa cho loại PHAN_TRAM (loại CO_DINH luôn để null)
+        BigDecimal giamToiDa = (request.loaiGiam() == LoaiGiam.PHAN_TRAM
+                && request.giamToiDa() != null
+                && request.giamToiDa().compareTo(BigDecimal.ZERO) > 0)
+                ? request.giamToiDa()
+                : null;
+        voucher.setGiamToiDa(giamToiDa);
+        voucher.setDonToiThieu(request.donToiThieu() != null ? request.donToiThieu() : BigDecimal.ZERO);
+        voucher.setDanhMuc(danhMuc);
+        voucher.setGioiHanLuot(request.gioiHanLuot());
+        voucher.setNgayBatDau(ngayBatDau);
+        voucher.setNgayKetThuc(request.ngayKetThuc());
+        voucher.setDangHoatDong(dangHoatDong);
     }
 
     private void ensureVoucherUsable(MaGiamGia voucher, LocalDate homNay) {

@@ -32,10 +32,18 @@ class DevTokenGeneratorTests {
 
                 ADMIN      nd_admin (Pham Minh Quan):
                 %s
+
+                CSKH       nd_cskh (Le Ngoc Han - chi xem voucher, bi chan tao/sua/tat):
+                %s
+
+                WAREHOUSE  nd_kho (Tran Quoc Dat - bi chan hoan toan khoi voucher):
+                %s
                 """.formatted(
                 jwtTokenProvider.generateToken("nd_kh01", "thang.nguyen@gmail.com", VaiTro.CUSTOMER),
                 jwtTokenProvider.generateToken("nd_kh09", "kiet.do@gmail.com", VaiTro.CUSTOMER),
-                jwtTokenProvider.generateToken("nd_admin", "admin@trithucviet.vn", VaiTro.ADMIN)
+                jwtTokenProvider.generateToken("nd_admin", "admin@trithucviet.vn", VaiTro.ADMIN),
+                jwtTokenProvider.generateToken("nd_cskh", "cskh@trithucviet.vn", VaiTro.CSKH),
+                jwtTokenProvider.generateToken("nd_kho", "kho@trithucviet.vn", VaiTro.WAREHOUSE_MANAGER)
         );
         Path output = Path.of("build", "dev-tokens.txt");
         Files.createDirectories(output.getParent());

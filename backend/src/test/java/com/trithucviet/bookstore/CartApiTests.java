@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.trithucviet.bookstore.config.JwtTokenProvider;
 import com.trithucviet.bookstore.entity.enums.VaiTro;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ class CartApiTests {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private MockMvc mockMvc;
     private String customerToken;
 
@@ -49,6 +53,16 @@ class CartApiTests {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         customerToken = bearer("nd_kh01", "thang.nguyen@gmail.com", VaiTro.CUSTOMER);
+
+        // Cô lập dữ liệu test trong transaction (tự rollback sau mỗi test) để không bị sai lệch
+        // nếu trước đó người dùng vừa thử thêm/xóa giỏ hàng của nd_kh01 qua Postman
+        entityManager.createNativeQuery("DELETE FROM gio_hang WHERE nguoi_dung_id = 'nd_kh01'").executeUpdate();
+        entityManager.createNativeQuery(
+                "INSERT INTO gio_hang (nguoi_dung_id, sach_id, so_luong, da_chon) "
+                        + "VALUES ('nd_kh01', 'sach_011', 1, TRUE), ('nd_kh01', 'sach_026', 2, TRUE)"
+        ).executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
     }
 
     private String bearer(String userId, String email, VaiTro vaiTro) {
