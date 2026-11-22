@@ -1,5 +1,6 @@
-import { apiClient, db } from '@shared/index';
+import { db } from '@shared/index';
 import { Book, Category, Review } from '@shared/types';
+import { apiRequest } from '@/services/httpClient';
 
 export type UserTrackingAction =
   | 'XEM_CHI_TIET'
@@ -7,6 +8,205 @@ export type UserTrackingAction =
   | 'THEM_YEU_THICH'
   | 'THEM_GIO_HANG'
   | 'MUA_HANG';
+
+export type CatalogSortBy =
+  | 'popular'
+  | 'price_asc'
+  | 'price_desc'
+  | 'discount_desc'
+  | 'rating'
+  | 'newest'
+  | 'title_asc'
+  | 'title_desc';
+
+export interface CategoryTreeItem extends Category {
+  children: Category[];
+}
+
+export interface BookPageResult {
+  items: Book[];
+  // Số trang 1-based dùng trực tiếp trên giao diện (Trang 1, Trang 2, ...)
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  appliedSort: CatalogSortBy;
+}
+
+export interface HomeBooksResult {
+  flashSaleBooks: Book[];
+  bestSellerBooks: Book[];
+  totalFlashSale: number;
+  totalBestSeller: number;
+  totalVisibleBooks: number;
+}
+
+// --- Khuôn DTO gốc trả về từ Backend Spring Boot (Bước 3 - Phần 1 & 2) ---
+
+interface BackendCategoryDto {
+  id: string;
+  tenDanhMuc: string;
+  duongDan: string;
+  danhMucChaId: string | null;
+  moTa: string | null;
+  tenBieuTuong: string | null;
+  thuTuHienThi: number | null;
+  soLuongSach: number;
+  danhMucCon: BackendCategoryDto[];
+}
+
+interface BackendBookDto {
+  id: string;
+  maIsbn: string;
+  tieuDe: string;
+  duongDan: string;
+  danhMucId: string;
+  tenDanhMuc: string;
+  tenDanhMucCon: string | null;
+  tacGiaId: string;
+  tenTacGia: string;
+  nhaXuatBanId: string;
+  tenNhaXuatBan: string;
+  giaBan: number | string;
+  giaGoc: number | string;
+  dangFlashSale: boolean;
+  giaFlashSale: number | string | null;
+  donGiaApDung: number | string;
+  phanTramGiam: number;
+  tonKho: number;
+  daBan: number;
+  diemDanhGiaTb: number | string;
+  soLuotDanhGia: number;
+  loaiBia: string | null;
+  namXuatBan: number | null;
+  anhBiaUrl: string;
+  tomTatNgan: string | null;
+  banChay: boolean;
+}
+
+interface BackendBookDetailDto extends BackendBookDto {
+  tieuSuTacGia: string | null;
+  soTrang: number | null;
+  anhChiTietUrls: string[];
+  moTaChiTiet: string | null;
+  tuKhoa: string[];
+  ngayTao: string | null;
+  sachCungChuDe: BackendBookDto[];
+}
+
+interface BackendHomeBooksResponse {
+  flashSaleBooks: BackendBookDto[];
+  bestSellerBooks: BackendBookDto[];
+  tongSoSachFlashSale: number;
+  tongSoSachBanChay: number;
+  tongSoSachHienThi: number;
+}
+
+interface BackendBookPageResponse {
+  items: BackendBookDto[];
+  // Backend Spring trả page 0-based -> frontend quy đổi +1 thành 1-based
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  appliedSort: CatalogSortBy;
+}
+
+interface BackendReviewDto {
+  id: string;
+  sachId: string;
+  nguoiDungId: string;
+  tenNguoiDung: string;
+  soSao: number;
+  binhLuan: string;
+  anhDanhGiaUrls: string[];
+  ngayTao: string | null;
+}
+
+// --- Hàm ánh xạ dữ liệu tiếng Việt từ Backend sang model dùng chung của Frontend ---
+
+function mapCategory(dto: BackendCategoryDto): CategoryTreeItem {
+  return {
+    id: dto.id,
+    name: dto.tenDanhMuc,
+    slug: dto.duongDan,
+    parentId: dto.danhMucChaId,
+    description: dto.moTa || '',
+    iconName: dto.tenBieuTuong || 'book-outline',
+    bookCount: Number(dto.soLuongSach || 0),
+    isActive: true,
+    displayOrder: Number(dto.thuTuHienThi || 1),
+    children: (dto.danhMucCon || []).map(mapCategory),
+  };
+}
+
+function mapBook(dto: BackendBookDto): Book {
+  const isFlash = Boolean(dto.dangFlashSale) && dto.giaFlashSale != null && Number(dto.giaFlashSale) > 0;
+  return {
+    id: dto.id,
+    isbn: dto.maIsbn,
+    title: dto.tieuDe,
+    slug: dto.duongDan,
+    authorId: dto.tacGiaId,
+    authorName: dto.tenTacGia,
+    publisherId: dto.nhaXuatBanId,
+    publisherName: dto.tenNhaXuatBan,
+    categoryId: dto.danhMucId,
+    categoryName: dto.tenDanhMuc,
+    SubCategoryName: dto.tenDanhMucCon || undefined,
+    price: Number(dto.giaBan || 0),
+    originalPrice: Number(dto.giaGoc || 0),
+    stock: Number(dto.tonKho || 0),
+    soldCount: Number(dto.daBan || 0),
+    ratingAvg: Number(dto.diemDanhGiaTb || 0),
+    ratingCount: Number(dto.soLuotDanhGia || 0),
+    pageCount: 0,
+    publishYear: Number(dto.namXuatBan || 0),
+    coverFormat: dto.loaiBia === 'Bìa cứng' ? 'Bìa cứng' : 'Bìa mềm',
+    coverUrl: dto.anhBiaUrl,
+    galleryUrls: dto.anhBiaUrl ? [dto.anhBiaUrl] : [],
+    shortSummary: dto.tomTatNgan || '',
+    description: dto.tomTatNgan || '',
+    isFlashSale: isFlash,
+    flashSalePrice: isFlash ? Number(dto.giaFlashSale) : undefined,
+    isBestSeller: Boolean(dto.banChay),
+    isVisible: true,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function mapBookDetail(dto: BackendBookDetailDto): Book {
+  const base = mapBook(dto);
+  return {
+    ...base,
+    pageCount: Number(dto.soTrang || 0),
+    galleryUrls: dto.anhChiTietUrls?.length ? dto.anhChiTietUrls : base.galleryUrls,
+    description: dto.moTaChiTiet || dto.tomTatNgan || '',
+    createdAt: dto.ngayTao || base.createdAt,
+  };
+}
+
+function mapReview(dto: BackendReviewDto, bookTitle = ''): Review {
+  return {
+    id: dto.id,
+    bookId: dto.sachId,
+    bookTitle,
+    userId: dto.nguoiDungId,
+    userName: dto.tenNguoiDung,
+    orderId: '',
+    rating: Number(dto.soSao || 5),
+    comment: dto.binhLuan,
+    imageUrls: dto.anhDanhGiaUrls || [],
+    createdAt: dto.ngayTao || new Date().toISOString(),
+    isHidden: false,
+  };
+}
+
+// --- Phần User Tracking cục bộ tạm thời (sẽ thay bằng API Bước 8 ở giai đoạn sau) ---
 
 interface UserBehaviorEvent {
   id: string;
@@ -19,31 +219,29 @@ interface UserBehaviorEvent {
   timestamp: number;
 }
 
-// Lưu lịch sử hành vi người dùng (đa chủ đề để mô phỏng thực tế Shopee / Tiki)
 const behaviorLogs: UserBehaviorEvent[] = [
   {
     id: 'hv-seed-1',
-    bookId: 'book-1',
-    categoryId: 'cat-tech',
+    bookId: 'sach_113',
+    categoryId: 'dm_cong_nghe',
     categoryName: 'Công nghệ & Lập trình',
     action: 'XEM_CHI_TIET',
     dwellSeconds: 28,
     weightScore: 5,
-    timestamp: Date.now() - 1000 * 60 * 15, // 15 phút trước
+    timestamp: Date.now() - 1000 * 60 * 15,
   },
   {
     id: 'hv-seed-2',
-    bookId: 'book-2',
-    categoryId: 'cat-econ',
+    bookId: 'sach_045',
+    categoryId: 'dm_kinh_te',
     categoryName: 'Kinh tế & Quản trị',
     action: 'THEM_YEU_THICH',
     dwellSeconds: 10,
     weightScore: 4,
-    timestamp: Date.now() - 1000 * 60 * 45, // 45 phút trước
+    timestamp: Date.now() - 1000 * 60 * 45,
   },
 ];
 
-// Đếm số lần 1 chủ đề đã được hiển thị trên kệ Đề xuất nhưng khách KHÔNG bấm vào đọc (Impression Fatigue)
 const ignoredImpressionsByCategory = new Map<string, number>();
 
 function computeWeight(action: UserTrackingAction, dwellSeconds = 0): number {
@@ -64,9 +262,6 @@ function computeWeight(action: UserTrackingAction, dwellSeconds = 0): number {
   }
 }
 
-// Hệ số suy giảm theo thời gian (Time Decay):
-// - Hành vi xem chi tiết giảm nhanh (chu kỳ bán rã 48h, hết hạn sau 7 ngày)
-// - Hành vi thả tim / thêm giỏ / mua hàng giữ lâu hơn (chu kỳ bán rã 14–30 ngày)
 function computeTimeDecayFactor(action: UserTrackingAction, timestamp: number): number {
   const ageHours = Math.max(0, (Date.now() - timestamp) / (1000 * 60 * 60));
   const halfLifeHours =
@@ -77,32 +272,133 @@ function computeTimeDecayFactor(action: UserTrackingAction, timestamp: number): 
         : 48;
 
   if (action === 'XEM_CHI_TIET' && ageHours > 24 * 7) {
-    return 0; // Quá 7 ngày chỉ xem mà không mua/yêu thích thì tự hết hạn
+    return 0;
   }
   return Math.pow(0.5, ageHours / halfLifeHours);
 }
 
+/**
+ * Service Sách & Danh mục (Bước 3 - Phần 1 & 2) gọi API thật từ Backend Spring Boot (186 cuốn sách PostgreSQL).
+ */
 export const bookService = {
+  async getCategories(): Promise<CategoryTreeItem[]> {
+    const res = await apiRequest<BackendCategoryDto[]>('/api/v1/categories', {
+      withAuth: false,
+    });
+    return res.map(mapCategory);
+  },
+
+  async getHomeBooks(limit = 12): Promise<HomeBooksResult> {
+    const res = await apiRequest<BackendHomeBooksResponse>(
+      `/api/v1/books/home?limit=${encodeURIComponent(String(limit))}`,
+      { withAuth: false }
+    );
+    return {
+      flashSaleBooks: res.flashSaleBooks.map(mapBook),
+      bestSellerBooks: res.bestSellerBooks.map(mapBook),
+      totalFlashSale: Number(res.tongSoSachFlashSale || 0),
+      totalBestSeller: Number(res.tongSoSachBanChay || 0),
+      totalVisibleBooks: Number(res.tongSoSachHienThi || 0),
+    };
+  },
+
+  /**
+   * Tìm kiếm, lọc đa tiêu chí, sắp xếp chuẩn sàn TMĐT và phân trang (số trang 1-based bắt đầu từ 1).
+   * Tầng UI truyền `page = 1, 2, 3...`, hàm tự trừ 1 (`page - 1`) để gửi đúng 0-based lên Spring Boot,
+   * rồi cộng lại +1 khi trả về cho UI hiển thị.
+   */
+  async getCatalogBooksPage(params?: {
+    search?: string;
+    categoryId?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    minRating?: number;
+    flashSaleOnly?: boolean;
+    bestSellerOnly?: boolean;
+    inStockOnly?: boolean;
+    coverType?: string;
+    sortBy?: CatalogSortBy;
+    page?: number;
+    size?: number;
+  }): Promise<BookPageResult> {
+    const query = new URLSearchParams();
+    if (params?.search?.trim()) query.set('search', params.search.trim());
+    if (params?.categoryId && params.categoryId !== 'ALL') {
+      query.set('categoryId', params.categoryId);
+    }
+    if (params?.minPrice !== undefined) query.set('minPrice', String(params.minPrice));
+    if (params?.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice));
+    if (params?.minRating !== undefined) query.set('minRating', String(params.minRating));
+    if (params?.flashSaleOnly) query.set('flashSaleOnly', 'true');
+    if (params?.bestSellerOnly) query.set('bestSellerOnly', 'true');
+    if (params?.inStockOnly) query.set('inStockOnly', 'true');
+    if (params?.coverType?.trim()) query.set('coverType', params.coverType.trim());
+    if (params?.sortBy) query.set('sortBy', params.sortBy);
+
+    const oneBasedPage = Math.max(1, Math.floor(params?.page ?? 1));
+    const pageSize = Math.max(1, Math.floor(params?.size ?? 20));
+    query.set('page', String(oneBasedPage - 1));
+    query.set('size', String(pageSize));
+
+    const res = await apiRequest<BackendBookPageResponse>(`/api/v1/books?${query.toString()}`, {
+      withAuth: false,
+    });
+
+    return {
+      items: res.items.map(mapBook),
+      page: res.totalElements === 0 ? 1 : res.page + 1,
+      size: res.size,
+      totalElements: Number(res.totalElements || 0),
+      totalPages: Number(res.totalPages || 0),
+      hasNext: Boolean(res.hasNext),
+      hasPrevious: Boolean(res.hasPrevious),
+      appliedSort: res.appliedSort || 'popular',
+    };
+  },
+
   async getCatalogBooks(params?: {
     search?: string;
     categoryId?: string;
     minPrice?: number;
     maxPrice?: number;
-    sortBy?: 'popular' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
+    sortBy?: CatalogSortBy;
   }): Promise<Book[]> {
-    return apiClient.getBooks({ ...params, onlyVisible: true });
+    const res = await this.getCatalogBooksPage({
+      ...params,
+      page: 1,
+      size: 200,
+    });
+    return res.items;
+  },
+
+  async getBookDetailWithRelated(
+    bookId: string
+  ): Promise<{ book: Book; relatedBooks: Book[] }> {
+    const dto = await apiRequest<BackendBookDetailDto>(
+      `/api/v1/books/${encodeURIComponent(bookId)}`,
+      { withAuth: false }
+    );
+    return {
+      book: mapBookDetail(dto),
+      relatedBooks: (dto.sachCungChuDe || []).map(mapBook),
+    };
   },
 
   async getBookDetail(bookId: string): Promise<Book | undefined> {
-    return apiClient.getBookById(bookId);
+    try {
+      const { book } = await this.getBookDetailWithRelated(bookId);
+      return book;
+    } catch {
+      return undefined;
+    }
   },
 
-  async getCategories(): Promise<Category[]> {
-    return apiClient.getCategories();
-  },
-
-  async getBookReviews(bookId: string): Promise<Review[]> {
-    return db.reviews.filter((r) => r.bookId === bookId && !r.isHidden);
+  async getBookReviews(bookId: string, bookTitle = ''): Promise<Review[]> {
+    const dtos = await apiRequest<BackendReviewDto[]>(
+      `/api/v1/books/${encodeURIComponent(bookId)}/reviews`,
+      { withAuth: false }
+    );
+    return dtos.map((r) => mapReview(r, bookTitle));
   },
 
   trackBookBehavior(payload: {
@@ -113,7 +409,6 @@ export const bookService = {
     const dwell = Math.max(0, Math.round(payload.dwellSeconds || 0));
     const weightScore = computeWeight(payload.action, dwell);
 
-    // Khi người dùng thực sự tương tác với chủ đề này, xóa bộ đếm "bỏ qua" (reset Impression Fatigue)
     ignoredImpressionsByCategory.set(payload.book.categoryId, 0);
 
     behaviorLogs.unshift({
@@ -138,7 +433,12 @@ export const bookService = {
     topCategories: string[];
     books: Book[];
   }> {
-    const allBooks = await apiClient.getBooks({ onlyVisible: true, sortBy: 'popular' });
+    // Lấy Top 60 sách bán chạy thật từ PostgreSQL để gợi ý bằng dữ liệu 186 sách thật
+    const { items: allBooks } = await this.getCatalogBooksPage({
+      sortBy: 'popular',
+      page: 1,
+      size: 60,
+    });
     const excluded = new Set<string>(options?.excludeBookIds || []);
 
     if (behaviorLogs.length === 0) {
@@ -149,7 +449,6 @@ export const bookService = {
       };
     }
 
-    // 1. Tính điểm từng chủ đề có áp dụng Time Decay + phạt Impression Fatigue nếu bị lướt qua nhiều lần
     const categoryScores = new Map<string, { name: string; score: number; lastTs: number }>();
 
     behaviorLogs.forEach((ev, idx) => {
@@ -158,7 +457,6 @@ export const bookService = {
 
       const recencyMultiplier = idx === 0 ? 1.8 : idx < 3 ? 1.35 : 1.0;
       const ignoredCount = ignoredImpressionsByCategory.get(ev.categoryId) || 0;
-      // Nếu chủ đề đã hiện > 3 lần liên tiếp mà khách không bấm vào xem, giảm 20% điểm mỗi lần tiếp theo
       const fatiguePenalty =
         ignoredCount > 3 ? Math.pow(0.8, ignoredCount - 3) : 1.0;
 
@@ -187,11 +485,6 @@ export const bookService = {
       };
     }
 
-    // 2. Phân bổ đa chủ đề (Multi-Interest Mixing) cho tối đa 6 cuốn trên kệ Đề xuất:
-    // - Chủ đề #1: tối đa 3 cuốn
-    // - Chủ đề #2: tối đa 2 cuốn
-    // - Chủ đề #3 (hoặc sách khám phá mới): 1 cuốn
-    // Đồng thời LOẠI TRỪ những cuốn khách đã mua / đã bỏ giỏ / đã thả tim (chỉ gợi ý sách CÙNG LOẠI chưa có)
     const quotas = [3, 2, 1];
     const recommended: Book[] = [];
     const seenBookIds = new Set<string>(excluded);
@@ -211,7 +504,6 @@ export const bookService = {
       }
       if (addedForCat > 0) {
         activeCategoryNames.push(meta.name);
-        // Tăng bộ đếm hiển thị; nếu khách bấm vào đọc thì trackBookBehavior sẽ reset về 0
         ignoredImpressionsByCategory.set(
           catId,
           (ignoredImpressionsByCategory.get(catId) || 0) + 1
@@ -219,7 +511,6 @@ export const bookService = {
       }
     });
 
-    // Bù thêm sách bán chạy khác nếu chưa đủ 6 cuốn (Exploration 15%)
     for (const b of allBooks) {
       if (recommended.length >= 6) break;
       if (!seenBookIds.has(b.id)) {

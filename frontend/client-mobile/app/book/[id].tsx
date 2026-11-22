@@ -18,7 +18,8 @@ import { bookService } from '@/services/bookService';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { useAiChat } from '@/hooks/useAiChat';
-import { EmptyStateView } from '@/components/common/StateViews';
+import { BookCard } from '@/components/common/BookCard';
+import { EmptyStateView, ErrorStateView } from '@/components/common/StateViews';
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,7 +29,10 @@ export default function BookDetailScreen() {
   const { openChat, sendMessage } = useAiChat();
 
   const [book, setBook] = useState<Book | undefined>(undefined);
+  const [relatedBooks, setRelatedBooks] = useState<Book[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [addedToast, setAddedToast] = useState(false);
@@ -38,32 +42,46 @@ export default function BookDetailScreen() {
     let enterTime = Date.now();
     let currentBook: Book | undefined;
     let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
     const load = async () => {
       if (!id) return;
-      const [detail, revList] = await Promise.all([
-        bookService.getBookDetail(id),
-        bookService.getBookReviews(id),
-      ]);
-      setBook(detail);
-      setReviews(revList);
-      currentBook = detail;
-      enterTime = Date.now();
+      try {
+        setIsLoading(true);
+        setErrorMsg(null);
+        const [detailRes, revList] = await Promise.all([
+          bookService.getBookDetailWithRelated(id),
+          bookService.getBookReviews(id),
+        ]);
+        if (cancelled) return;
 
-      if (detail) {
-        // Ghi nhận ngay nếu người dùng dừng lại trên trang từ 5 giây trở lên
+        setBook(detailRes.book);
+        setRelatedBooks(detailRes.relatedBooks);
+        setReviews(revList);
+        currentBook = detailRes.book;
+        enterTime = Date.now();
+
         dwellTimer = setTimeout(() => {
           bookService.trackBookBehavior({
-            book: detail,
+            book: detailRes.book,
             action: 'XEM_CHI_TIET',
             dwellSeconds: 5,
           });
         }, 5000);
+      } catch (err) {
+        if (!cancelled) {
+          setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thông tin sách.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
     load();
 
     return () => {
+      cancelled = true;
       if (dwellTimer) clearTimeout(dwellTimer);
       if (currentBook) {
         const dwellSeconds = Math.round((Date.now() - enterTime) / 1000);
@@ -78,7 +96,7 @@ export default function BookDetailScreen() {
     };
   }, [id]);
 
-  if (!book) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <EmptyStateView
@@ -86,6 +104,17 @@ export default function BookDetailScreen() {
           description="Vui lòng chờ trong giây lát."
           actionLabel="Quay lại danh mục"
           onAction={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (errorMsg || !book) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ErrorStateView
+          message={errorMsg || 'Không tìm thấy cuốn sách này.'}
+          onRetry={() => router.back()}
         />
       </SafeAreaView>
     );
@@ -308,6 +337,24 @@ export default function BookDetailScreen() {
             ))
           )}
         </View>
+
+        {/* Sách cùng chủ đề từ API GET /api/v1/books/{id} */}
+        {relatedBooks.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>
+              Sách cùng chủ đề ({relatedBooks.length})
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10, paddingTop: 4 }}
+            >
+              {relatedBooks.map((item) => (
+                <BookCard key={`rel-${item.id}`} book={item} compact />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </ScrollView>
 
       {addedToast ? (

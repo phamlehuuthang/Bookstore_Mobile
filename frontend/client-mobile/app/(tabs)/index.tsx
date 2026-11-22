@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -31,11 +31,17 @@ export default function HomeScreen() {
   const { user, wishlistBookIds, notifications } = useAuth();
   const { openChat } = useAiChat();
 
-  const [books, setBooks] = useState<Book[]>([]);
+  const [flashSaleBooks, setFlashSaleBooks] = useState<Book[]>([]);
+  const [bestSellerBooks, setBestSellerBooks] = useState<Book[]>([]);
   const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
   const [recommendReason, setRecommendReason] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>([]);
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchedBooks, setSearchedBooks] = useState<Book[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [isSearchingApi, setIsSearchingApi] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -51,12 +57,14 @@ export default function HomeScreen() {
         ...wishlistBookIds,
         ...cartItems.map((c) => c.book.id),
       ];
-      const [bookList, catList, recData] = await Promise.all([
-        bookService.getCatalogBooks({ sortBy: 'popular' }),
+      // Nạp song song 2 kệ Trang chủ (Flash Sale + Bán chạy), 7 danh mục cha và kệ Đề xuất từ API thật
+      const [homeData, catList, recData] = await Promise.all([
+        bookService.getHomeBooks(12),
         bookService.getCategories(),
         bookService.getPersonalizedRecommendations({ excludeBookIds }),
       ]);
-      setBooks(bookList);
+      setFlashSaleBooks(homeData.flashSaleBooks);
+      setBestSellerBooks(homeData.bestSellerBooks);
       setCategories(catList.filter((c) => c.parentId === null));
       setRecommendedBooks(recData.books);
       setRecommendReason(recData.reasonLabel);
@@ -78,12 +86,57 @@ export default function HomeScreen() {
         ...wishlistBookIds,
         ...cartItems.map((c) => c.book.id),
       ];
-      bookService.getPersonalizedRecommendations({ excludeBookIds }).then((recData) => {
-        setRecommendedBooks(recData.books);
-        setRecommendReason(recData.reasonLabel);
-      });
+      bookService
+        .getPersonalizedRecommendations({ excludeBookIds })
+        .then((recData) => {
+          setRecommendedBooks(recData.books);
+          setRecommendReason(recData.reasonLabel);
+        })
+        .catch(() => {
+          // Bỏ qua nếu Backend tạm ngắt khi quay lại tab
+        });
     }, [wishlistBookIds, cartItems])
   );
+
+  // Tìm kiếm trực tiếp trên toàn bộ 186 sách ở Backend (debounce 250ms để tránh gọi API liên tục từng phím)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchedBooks([]);
+      setSearchTotal(0);
+      setIsSearchingApi(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingApi(true);
+    const timer = setTimeout(() => {
+      bookService
+        .getCatalogBooksPage({ search: q, sortBy: 'popular', page: 1, size: 20 })
+        .then((res) => {
+          if (!cancelled) {
+            setSearchedBooks(res.items);
+            setSearchTotal(res.totalElements);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSearchedBooks([]);
+            setSearchTotal(0);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsSearchingApi(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -96,22 +149,7 @@ export default function HomeScreen() {
   const mins = String(Math.floor((countdownSeconds % 3600) / 60)).padStart(2, '0');
   const secs = String(countdownSeconds % 60).padStart(2, '0');
 
-  const flashSaleBooks = books.filter((b) => b.isFlashSale);
-  const bestSellerBooks = books.filter((b) => b.isBestSeller);
   const unreadNotifCount = notifications.filter((n) => !n.isRead).length;
-
-  const searchedBooks = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    return books.filter(
-      (b) =>
-        b.title.toLowerCase().includes(q) ||
-        b.authorName.toLowerCase().includes(q) ||
-        b.isbn.toLowerCase().includes(q) ||
-        b.categoryName.toLowerCase().includes(q)
-    );
-  }, [books, searchQuery]);
-
   const isSearching = searchQuery.trim().length > 0;
 
   return (
@@ -207,14 +245,16 @@ export default function HomeScreen() {
           <View style={{ paddingTop: 12, gap: 12 }}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                Kết quả tìm kiếm ({searchedBooks.length})
+                Kết quả tìm kiếm ({searchTotal})
               </Text>
               <Pressable onPress={() => setSearchQuery('')}>
                 <Text style={styles.seeAllText}>Đóng tìm kiếm</Text>
               </Pressable>
             </View>
 
-            {searchedBooks.length === 0 ? (
+            {isSearchingApi ? (
+              <BookGridSkeleton count={4} />
+            ) : searchedBooks.length === 0 ? (
               <EmptyStateView
                 icon="search-outline"
                 title="Không tìm thấy cuốn sách phù hợp"
@@ -276,7 +316,7 @@ export default function HomeScreen() {
               <BookGridSkeleton count={4} />
             ) : errorMsg ? (
               <ErrorStateView message={errorMsg} onRetry={() => loadData()} />
-            ) : books.length === 0 ? (
+            ) : flashSaleBooks.length === 0 && bestSellerBooks.length === 0 ? (
               <EmptyStateView
                 title="Kho sách đang cập nhật"
                 description="Hiện chưa có cuốn sách nào trong danh mục này."

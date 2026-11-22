@@ -175,7 +175,7 @@ class AuthApiTests {
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message")
-                        .value("Tài khoản của bạn đang tạm khóa do vi phạm chính sách hoặc lý do bảo mật. Vui lòng liên hệ CSKH 1900 6886 để được hỗ trợ."));
+                        .value("Tài khoản của bạn đang tạm khóa do vi phạm chính sách hoặc lý do bảo mật. Vui lòng liên hệ CSKH để được hỗ trợ."));
 
         // Sai mật khẩu -> 401
         mockMvc.perform(post("/api/v1/auth/login")
