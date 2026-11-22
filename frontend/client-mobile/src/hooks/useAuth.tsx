@@ -1,13 +1,18 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Address, NotificationItem, User } from '@shared/types';
 import { INITIAL_NOTIFICATIONS } from '@shared/api-client/mockData';
 import { authService } from '@/services/authService';
+import {
+  cartWishlistVoucherService,
+  WishlistBookItem,
+} from '@/services/cartWishlistVoucherService';
 
 interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
   // Cờ báo hiệu đang kiểm tra JWT lúc mới mở app/F5 để màn Profile hiển thị loading thay vì nháy form Login
   isHydrating: boolean;
+  wishlistItems: WishlistBookItem[];
   wishlistBookIds: string[];
   notifications: NotificationItem[];
   login: (email: string, password: string) => Promise<void>;
@@ -23,27 +28,28 @@ interface AuthContextValue {
   saveAddress: (address: Omit<Address, 'id'> & { id?: string }) => Promise<void>;
   setDefaultAddress: (addressId: string) => Promise<void>;
   deleteAddress: (addressId: string) => Promise<void>;
-  toggleWishlist: (bookId: string) => void;
+  // Trả về false nếu khách chưa đăng nhập để màn hình UI chủ động dẫn sang đăng nhập
+  toggleWishlist: (bookId: string) => Promise<boolean>;
+  refreshWishlist: () => Promise<void>;
   markAllNotificationsRead: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 /**
- * AuthProvider bọc ngoài toàn bộ ứng dụng tại app/_layout.tsx để chia sẻ phiên đăng nhập `user`
- * và sổ địa chỉ `user.addresses` cho tất cả màn hình (Profile, Checkout, Home, Orders).
+ * AuthProvider bọc ngoài toàn bộ ứng dụng tại app/_layout.tsx để chia sẻ phiên đăng nhập `user`,
+ * sổ địa chỉ `user.addresses` và Tủ sách yêu thích cho toàn bộ màn hình.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isHydrating, setIsHydrating] = useState<boolean>(true);
+  const [wishlistItems, setWishlistItems] = useState<WishlistBookItem[]>([]);
 
-  // Phần Yêu thích & Thông báo tạm giữ nguyên dữ liệu mẫu cho đến khi nối Bước 4 & Bước 7 lên frontend
-  const [wishlistBookIds, setWishlistBookIds] = useState<string[]>(['book-1', 'book-4', 'book-8']);
+  // Phần Thông báo tạm giữ nguyên dữ liệu mẫu cho đến khi nối Bước 7 lên frontend
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
 
   // Tự động khôi phục phiên từ JWT đã lưu mỗi lần ứng dụng khởi động
   useEffect(() => {
-    // Biến cờ `active` tránh gọi setState sau khi component đã bị unmount (tránh rò rỉ bộ nhớ / warning React)
     let active = true;
     authService
       .restoreSession()
@@ -63,6 +69,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Mỗi khi user thay đổi (đăng nhập / khôi phục phiên / đăng xuất), tự đồng bộ Tủ sách yêu thích thật từ PostgreSQL
+  useEffect(() => {
+    if (!user) {
+      setWishlistItems([]);
+      return;
+    }
+
+    let active = true;
+    cartWishlistVoucherService
+      .getWishlist()
+      .then((items) => {
+        if (active) {
+          setWishlistItems(items);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWishlistItems([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const wishlistBookIds = useMemo(
+    () => wishlistItems.map((item) => item.sachId),
+    [wishlistItems]
+  );
+
   const login = async (email: string, password: string) => {
     const res = await authService.loginCustomer(email, password);
     setUser(res.user);
@@ -81,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     authService.logout();
     setUser(null);
+    setWishlistItems([]);
   };
 
   const updateProfile = async (fullName: string, phone: string) => {
@@ -94,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.changePassword(currentPassword, newPassword);
   };
 
-  // Dùng callback `setUser((prev) => ...)` khi cập nhật addresses để luôn lấy state mới nhất, tránh ghi đè dữ liệu cũ
   const saveAddress = async (address: Omit<Address, 'id'> & { id?: string }) => {
     if (!user) return;
     const updatedAddresses = await authService.saveAddress(address);
@@ -113,10 +150,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => (prev ? { ...prev, addresses: updatedAddresses } : null));
   };
 
-  const toggleWishlist = (bookId: string) => {
-    setWishlistBookIds((prev) =>
-      prev.includes(bookId) ? prev.filter((id) => id !== bookId) : [...prev, bookId]
-    );
+  const refreshWishlist = async () => {
+    if (!user) {
+      setWishlistItems([]);
+      return;
+    }
+    const items = await cartWishlistVoucherService.getWishlist();
+    setWishlistItems(items);
+  };
+
+  const toggleWishlist = async (bookId: string): Promise<boolean> => {
+    if (!user) {
+      return false;
+    }
+    await cartWishlistVoucherService.toggleWishlist(bookId);
+    await refreshWishlist();
+    return true;
   };
 
   const markAllNotificationsRead = () => {
@@ -129,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated: Boolean(user),
         isHydrating,
+        wishlistItems,
         wishlistBookIds,
         notifications,
         login,
@@ -140,6 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setDefaultAddress,
         deleteAddress,
         toggleWishlist,
+        refreshWishlist,
         markAllNotificationsRead,
       }}
     >

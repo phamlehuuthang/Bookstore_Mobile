@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Book, Review, formatCurrencyVND } from '@shared/types';
-import { INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
 import { bookService } from '@/services/bookService';
 import { useCart } from '@/hooks/useCart';
@@ -24,8 +23,16 @@ import { EmptyStateView, ErrorStateView } from '@/components/common/StateViews';
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { addToCart, appliedVoucher, applyVoucherCode } = useCart();
-  const { wishlistBookIds, toggleWishlist } = useAuth();
+  const {
+    activeVouchers,
+    addToCart,
+    appliedVoucher,
+    applyVoucherCode,
+    cartError,
+    voucherError,
+    clearCartError,
+  } = useCart();
+  const { isAuthenticated, wishlistBookIds, toggleWishlist } = useAuth();
   const { openChat, sendMessage } = useAiChat();
 
   const [book, setBook] = useState<Book | undefined>(undefined);
@@ -36,7 +43,13 @@ export default function BookDetailScreen() {
   const [quantity, setQuantity] = useState(1);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [addedToast, setAddedToast] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [voucherSavedToast, setVoucherSavedToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    clearCartError();
+    setActionError(null);
+  }, [id, clearCartError]);
 
   useEffect(() => {
     let enterTime = Date.now();
@@ -123,15 +136,36 @@ export default function BookDetailScreen() {
   const effectivePrice = book.flashSalePrice ?? book.price;
   const isLiked = wishlistBookIds.includes(book.id);
 
-  const handleAddToCart = () => {
-    addToCart(book, quantity);
+  // Chốt chặn yêu cầu đăng nhập chuẩn TMĐT trước khi thao tác Giỏ hàng / Mua ngay / Thả tim
+  const requireLoginOrRedirect = (): boolean => {
+    if (!isAuthenticated) {
+      router.push('/(tabs)/profile');
+      return false;
+    }
+    return true;
+  };
+
+  const handleAddToCart = async () => {
+    if (!requireLoginOrRedirect()) return;
+    setActionError(null);
+    const ok = await addToCart(book, quantity);
+    if (!ok) {
+      setActionError(cartError || 'Không thể thêm sách vào giỏ hàng.');
+      return;
+    }
     bookService.trackBookBehavior({ book, action: 'THEM_GIO_HANG' });
     setAddedToast(true);
     setTimeout(() => setAddedToast(false), 2200);
   };
 
-  const handleBuyNow = () => {
-    addToCart(book, quantity);
+  const handleBuyNow = async () => {
+    if (!requireLoginOrRedirect()) return;
+    setActionError(null);
+    const ok = await addToCart(book, quantity);
+    if (!ok) {
+      setActionError(cartError || 'Không thể thêm sách vào giỏ hàng.');
+      return;
+    }
     bookService.trackBookBehavior({ book, action: 'MUA_HANG' });
     router.push('/checkout');
   };
@@ -174,14 +208,15 @@ export default function BookDetailScreen() {
             ) : null}
             <View style={{ flex: 1 }} />
             <Pressable
-              onPress={() => {
+              onPress={async () => {
+                if (!requireLoginOrRedirect()) return;
                 if (!isLiked) {
                   bookService.trackBookBehavior({
                     book,
                     action: 'THEM_YEU_THICH',
                   });
                 }
-                toggleWishlist(book.id);
+                await toggleWishlist(book.id);
               }}
               hitSlop={10}
               style={styles.wishlistBtn}
@@ -236,14 +271,19 @@ export default function BookDetailScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8 }}
             >
-              {INITIAL_VOUCHERS.map((v) => {
+              {activeVouchers.map((v) => {
                 const isSelected = appliedVoucher?.code === v.code;
                 return (
                   <Pressable
                     key={v.id}
-                    onPress={() => {
-                      applyVoucherCode(v.code);
-                      setVoucherSavedToast(`Đã chọn mã ${v.code} (${v.title})`);
+                    onPress={async () => {
+                      if (!requireLoginOrRedirect()) return;
+                      const ok = await applyVoucherCode(v.code);
+                      if (ok) {
+                        setVoucherSavedToast(`Đã áp dụng mã ${v.code} (${v.title})`);
+                      } else {
+                        setVoucherSavedToast(null);
+                      }
                       setTimeout(() => setVoucherSavedToast(null), 2500);
                     }}
                     style={[
@@ -267,6 +307,10 @@ export default function BookDetailScreen() {
             </ScrollView>
             {voucherSavedToast ? (
               <Text style={styles.voucherToastText}>✓ {voucherSavedToast}</Text>
+            ) : voucherError ? (
+              <Text style={{ fontSize: 12, color: colors.danger, fontWeight: '600' }}>
+                {voucherError}
+              </Text>
             ) : null}
           </View>
 
@@ -361,6 +405,11 @@ export default function BookDetailScreen() {
         <View style={styles.toastBanner}>
           <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
           <Text style={styles.toastText}>Đã thêm {quantity} cuốn vào giỏ hàng!</Text>
+        </View>
+      ) : actionError || cartError ? (
+        <View style={[styles.toastBanner, { backgroundColor: colors.danger }]}>
+          <Ionicons name="alert-circle" size={18} color="#FFFFFF" />
+          <Text style={styles.toastText}>{actionError || cartError}</Text>
         </View>
       ) : null}
 

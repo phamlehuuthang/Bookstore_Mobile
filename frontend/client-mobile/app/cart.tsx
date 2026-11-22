@@ -15,18 +15,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrencyVND } from '@shared/types';
-import { INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
+import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { EmptyStateView } from '@/components/common/StateViews';
 
 export default function CartScreen() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const {
     items,
+    activeVouchers,
     selectedItems,
     appliedVoucher,
     voucherError,
+    cartError,
+    isLoadingCart,
+    clearCartError,
     subtotal,
     shippingFee,
     discountAmount,
@@ -47,6 +52,35 @@ export default function CartScreen() {
   } | null>(null);
 
   const allSelected = items.length > 0 && items.every((i) => i.selected);
+
+  // Chốt chặn chưa đăng nhập: Giỏ hàng gắn với từng khách hàng trong PostgreSQL
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+        <EmptyStateView
+          icon="lock-closed-outline"
+          title="Vui lòng đăng nhập để xem giỏ hàng"
+          description="Đăng nhập tài khoản khách hàng để đồng bộ giỏ hàng, lưu sách yêu thích và áp dụng mã giảm giá."
+          actionLabel="Đăng nhập ngay"
+          onAction={() => router.push('/(tabs)/profile')}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (isLoadingCart && items.length === 0) {
+    return (
+      <SafeAreaView edges={['bottom']} style={styles.safeArea}>
+        <EmptyStateView
+          icon="cart-outline"
+          title="Đang tải giỏ hàng..."
+          description="Đang đồng bộ danh sách sản phẩm từ máy chủ."
+          actionLabel="Quay lại"
+          onAction={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -95,6 +129,27 @@ export default function CartScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
         >
+          {cartError ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: 10,
+                borderRadius: 10,
+                backgroundColor: '#FEF2F2',
+                borderWidth: 1,
+                borderColor: '#FECACA',
+              }}
+            >
+              <Text style={[styles.errorText, { flex: 1 }]}>{cartError}</Text>
+              <Pressable onPress={clearCartError} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.danger} />
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Cart Items */}
           {items.map(({ book, quantity, selected }) => {
             const unitPrice = book.flashSalePrice ?? book.price;
@@ -198,12 +253,12 @@ export default function CartScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, marginTop: 4 }}
             >
-              {INITIAL_VOUCHERS.map((v) => (
+              {activeVouchers.map((v) => (
                 <Pressable
                   key={v.id}
                   onPress={() => {
                     setVoucherInput(v.code);
-                    applyVoucherCode(v.code);
+                    void applyVoucherCode(v.code);
                   }}
                   style={styles.quickVoucherChip}
                 >

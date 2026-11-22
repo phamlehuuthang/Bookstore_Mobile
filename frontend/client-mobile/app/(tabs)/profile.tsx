@@ -14,9 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Address, formatCurrencyVND } from '@shared/types';
-import { INITIAL_BOOKS, INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/hooks/useAuth';
+import { useCart } from '@/hooks/useCart';
 import { ApiError } from '@/services/httpClient';
 
 type ProfileSection = 'ADDRESSES' | 'VOUCHERS' | 'WISHLIST' | 'NOTIFICATIONS' | 'FAQ';
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
   const {
     user,
     isHydrating,
-    wishlistBookIds,
+    wishlistItems,
     notifications,
     login,
     register,
@@ -47,6 +47,7 @@ export default function ProfileScreen() {
     toggleWishlist,
     markAllNotificationsRead,
   } = useAuth();
+  const { activeVouchers } = useCart();
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('ADDRESSES');
 
@@ -345,7 +346,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const wishlistBooks = INITIAL_BOOKS.filter((b) => wishlistBookIds.includes(b.id));
+  // Danh sách yêu thích được tải trực tiếp từ PostgreSQL qua useAuth().wishlistItems
 
   // Cổng chờ 1: khi app vừa mở và AuthProvider đang gọi /auth/me kiểm tra JWT cũ -> hiện vòng xoay thay vì nháy màn Login
   if (isHydrating) {
@@ -733,7 +734,7 @@ export default function ProfileScreen() {
               { key: 'VOUCHERS', label: 'Ví Voucher', icon: 'ticket-outline' },
               {
                 key: 'WISHLIST',
-                label: `Yêu thích (${wishlistBooks.length})`,
+                label: `Yêu thích (${wishlistItems.length})`,
                 icon: 'heart-outline',
               },
               {
@@ -924,27 +925,36 @@ export default function ProfileScreen() {
         {activeSection === 'VOUCHERS' ? (
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionTitle}>Ví Voucher Ưu Đãi Của Bạn</Text>
-            {INITIAL_VOUCHERS.map((v) => (
-              <View key={v.id} style={styles.voucherCard}>
-                <View style={styles.voucherLeft}>
-                  <Ionicons name="ticket" size={24} color="#FFFFFF" />
-                  <Text style={styles.voucherCodeText}>{v.code}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={styles.itemCardTitle}>{v.title}</Text>
-                  <Text style={styles.itemCardSub}>{v.description}</Text>
-                  <Text style={styles.voucherExpiry}>
-                    Đơn tối thiểu {formatCurrencyVND(v.minOrderValue)} • HSD: {v.endDate}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => router.push('/cart')}
-                  style={styles.useVoucherBtn}
-                >
-                  <Text style={styles.useVoucherBtnText}>Dùng ngay</Text>
-                </Pressable>
+            {activeVouchers.length === 0 ? (
+              <View style={styles.itemCard}>
+                <Text style={styles.itemCardSub}>
+                  Hiện chưa có mã giảm giá nào đang hoạt động.
+                </Text>
               </View>
-            ))}
+            ) : (
+              activeVouchers.map((v) => (
+                <View key={v.id} style={styles.voucherCard}>
+                  <View style={styles.voucherLeft}>
+                    <Ionicons name="ticket" size={24} color="#FFFFFF" />
+                    <Text style={styles.voucherCodeText}>{v.code}</Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.itemCardTitle}>{v.title}</Text>
+                    <Text style={styles.itemCardSub}>{v.description}</Text>
+                    <Text style={styles.voucherExpiry}>
+                      Đơn tối thiểu {formatCurrencyVND(v.minOrderValue)} • HSD: {v.endDate}
+                      {v.categoryName ? ` • Riêng ${v.categoryName}` : ''}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => router.push('/cart')}
+                    style={styles.useVoucherBtn}
+                  >
+                    <Text style={styles.useVoucherBtnText}>Dùng ngay</Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
           </View>
         ) : null}
 
@@ -952,26 +962,42 @@ export default function ProfileScreen() {
         {activeSection === 'WISHLIST' ? (
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionTitle}>Tủ sách yêu thích</Text>
-            {wishlistBooks.map((book) => (
-              <Pressable
-                key={book.id}
-                onPress={() => router.push(`/book/${book.id}`)}
-                style={styles.itemCard}
-              >
-                <View style={styles.itemCardHeader}>
-                  <Text style={[styles.itemCardTitle, { flex: 1 }]} numberOfLines={1}>
-                    {book.title}
-                  </Text>
-                  <Pressable onPress={() => toggleWishlist(book.id)} hitSlop={8}>
-                    <Ionicons name="heart" size={20} color={colors.danger} />
-                  </Pressable>
-                </View>
-                <Text style={styles.itemCardSub}>{book.authorName}</Text>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>
-                  {formatCurrencyVND(book.flashSalePrice ?? book.price)}
+            {wishlistItems.length === 0 ? (
+              <View style={styles.itemCard}>
+                <Text style={styles.itemCardSub}>
+                  Tủ sách yêu thích đang trống. Hãy bấm trái tim ở cuốn sách bạn thích để lưu lại!
                 </Text>
-              </Pressable>
-            ))}
+              </View>
+            ) : (
+              wishlistItems.map((book) => (
+                <Pressable
+                  key={book.sachId}
+                  onPress={() => router.push(`/book/${book.sachId}`)}
+                  style={styles.itemCard}
+                >
+                  <View style={styles.itemCardHeader}>
+                    <Text style={[styles.itemCardTitle, { flex: 1 }]} numberOfLines={1}>
+                      {book.tieuDe}
+                    </Text>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        void toggleWishlist(book.sachId);
+                      }}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="heart" size={20} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.itemCardSub}>
+                    {book.tenTacGia} • {book.tenDanhMuc}
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>
+                    {formatCurrencyVND(book.donGiaApDung)}
+                  </Text>
+                </Pressable>
+              ))
+            )}
           </View>
         ) : null}
 
