@@ -1,166 +1,296 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { Book, Voucher } from '@shared/types';
-import { INITIAL_BOOKS, INITIAL_VOUCHERS } from '@shared/api-client/mockData';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Book } from '@shared/types';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  ActiveVoucherItem,
+  CartEntry,
+  CartSnapshot,
+  cartWishlistVoucherService,
+} from '@/services/cartWishlistVoucherService';
 
-export interface CartEntry {
-  book: Book;
-  quantity: number;
-  selected: boolean;
-}
+export type { CartEntry };
 
 interface CartContextValue {
   items: CartEntry[];
-  appliedVoucher: Voucher | null;
+  activeVouchers: ActiveVoucherItem[];
+  appliedVoucher: ActiveVoucherItem | null;
   voucherError: string | null;
+  cartError: string | null;
+  isLoadingCart: boolean;
   totalItemsCount: number;
   selectedItems: CartEntry[];
   subtotal: number;
   shippingFee: number;
   discountAmount: number;
   finalTotal: number;
-  addToCart: (book: Book, quantity?: number) => void;
-  updateQuantity: (bookId: string, quantity: number) => void;
-  removeFromCart: (bookId: string) => void;
-  toggleSelect: (bookId: string) => void;
-  toggleSelectAll: (selectAll: boolean) => void;
-  applyVoucherCode: (code: string) => boolean;
+  refreshCart: () => Promise<void>;
+  clearCartError: () => void;
+  addToCart: (book: Book, quantity?: number) => Promise<boolean>;
+  updateQuantity: (bookId: string, quantity: number) => Promise<void>;
+  removeFromCart: (bookId: string) => Promise<void>;
+  toggleSelect: (bookId: string) => Promise<void>;
+  toggleSelectAll: (selectAll: boolean) => Promise<void>;
+  applyVoucherCode: (code: string) => Promise<boolean>;
   clearVoucher: () => void;
   clearSelectedAfterCheckout: () => void;
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
+/**
+ * CartProvider kết nối Giỏ hàng & Voucher thật qua Backend (Bước 4 - Phần 2):
+ * - Khách chưa đăng nhập -> giỏ hàng luôn trống (`items = []`), không tự nạp hàng giả nữa.
+ * - Khi đăng nhập -> tự tải giỏ hàng của chính khách hàng từ PostgreSQL.
+ * - Mọi thao tác thêm/sửa/xóa/tick chọn đều chạy qua API và kiểm tra tồn kho ở Backend.
+ */
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartEntry[]>([
-    { book: INITIAL_BOOKS[0], quantity: 1, selected: true },
-    { book: INITIAL_BOOKS[3], quantity: 1, selected: true },
-  ]);
-  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(INITIAL_VOUCHERS[0]);
+  const { user, isAuthenticated } = useAuth();
+
+  const [items, setItems] = useState<CartEntry[]>([]);
+  const [totalItemsCount, setTotalItemsCount] = useState(0);
+  const [subtotal, setSubtotal] = useState(0);
+  const [shippingFee, setShippingFee] = useState(0);
+
+  const [activeVouchers, setActiveVouchers] = useState<ActiveVoucherItem[]>([]);
+  const [appliedVoucher, setAppliedVoucher] = useState<ActiveVoucherItem | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [cartError, setCartError] = useState<string | null>(null);
+  const [isLoadingCart, setIsLoadingCart] = useState(false);
 
-  const addToCart = (book: Book, quantity = 1) => {
-    setItems((prev) => {
-      const existingIdx = prev.findIndex((entry) => entry.book.id === book.id);
-      if (existingIdx !== -1) {
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          quantity: Math.min(book.stock, next[existingIdx].quantity + quantity),
-          selected: true,
-        };
-        return next;
+  // Tải danh sách Voucher đang mở công khai (permitAll) ngay khi app khởi động
+  useEffect(() => {
+    let active = true;
+    cartWishlistVoucherService
+      .getActiveVouchers()
+      .then((list) => {
+        if (active) {
+          setActiveVouchers(list);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setActiveVouchers([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const applyCartSnapshot = useCallback((snapshot: CartSnapshot) => {
+    setItems(snapshot.entries);
+    setTotalItemsCount(snapshot.totalItemsCount);
+    setSubtotal(snapshot.subtotal);
+    setShippingFee(snapshot.shippingFee);
+  }, []);
+
+  // Mỗi khi thay đổi trạng thái giỏ hàng, nếu đang áp voucher thì kiểm tra lại điều kiện voucher ở Backend
+  const syncSnapshotAndRevalidateVoucher = useCallback(
+    async (snapshot: CartSnapshot, currentVoucher: ActiveVoucherItem | null) => {
+      applyCartSnapshot(snapshot);
+      if (!currentVoucher) {
+        return;
       }
-      return [{ book, quantity: Math.min(book.stock, quantity), selected: true }, ...prev];
-    });
+
+      const hasSelected = snapshot.entries.some((entry) => entry.selected);
+      if (!hasSelected || snapshot.subtotal <= 0) {
+        setDiscountAmount(0);
+        setVoucherError(null);
+        return;
+      }
+
+      try {
+        const validated = await cartWishlistVoucherService.validateVoucher(currentVoucher.code);
+        setAppliedVoucher(validated.voucher);
+        setDiscountAmount(validated.discountAmount);
+        setVoucherError(null);
+      } catch (err) {
+        setDiscountAmount(0);
+        setVoucherError(
+          err instanceof Error
+            ? err.message
+            : 'Giỏ hàng vừa thay đổi nên mã giảm giá tạm chưa đủ điều kiện.'
+        );
+      }
+    },
+    [applyCartSnapshot]
+  );
+
+  const refreshCart = useCallback(async () => {
+    if (!isAuthenticated) {
+      setItems([]);
+      setTotalItemsCount(0);
+      setSubtotal(0);
+      setShippingFee(0);
+      setAppliedVoucher(null);
+      setDiscountAmount(0);
+      setVoucherError(null);
+      setCartError(null);
+      return;
+    }
+
+    setIsLoadingCart(true);
+    try {
+      const snapshot = await cartWishlistVoucherService.getCart();
+      applyCartSnapshot(snapshot);
+      setCartError(null);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể tải giỏ hàng.');
+    } finally {
+      setIsLoadingCart(false);
+    }
+  }, [applyCartSnapshot, isAuthenticated]);
+
+  // Đồng bộ giỏ hàng mỗi khi đăng nhập / khôi phục phiên / đăng xuất
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setItems([]);
+      setTotalItemsCount(0);
+      setSubtotal(0);
+      setShippingFee(0);
+      setAppliedVoucher(null);
+      setDiscountAmount(0);
+      setVoucherError(null);
+      setCartError(null);
+      setIsLoadingCart(false);
+      return;
+    }
+    refreshCart();
+  }, [isAuthenticated, user?.id, refreshCart]);
+
+  const clearCartError = () => setCartError(null);
+
+  const addToCart = async (book: Book, quantity = 1): Promise<boolean> => {
+    if (!isAuthenticated) {
+      return false;
+    }
+    setCartError(null);
+    try {
+      const snapshot = await cartWishlistVoucherService.addToCart(book.id, quantity);
+      await syncSnapshotAndRevalidateVoucher(snapshot, appliedVoucher);
+      return true;
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể thêm sách vào giỏ hàng.');
+      return false;
+    }
   };
 
-  const updateQuantity = (bookId: string, quantity: number) => {
-    // Khóa số lượng tối thiểu ở mức 1 (muốn xóa phải bấm nút Thùng rác và xác nhận)
+  const updateQuantity = async (bookId: string, quantity: number) => {
+    if (!isAuthenticated) return;
+    setCartError(null);
     const clampedQty = Math.max(1, quantity);
-    setItems((prev) =>
-      prev.map((item) =>
-        item.book.id === bookId
-          ? { ...item, quantity: Math.min(item.book.stock, clampedQty) }
-          : item
-      )
-    );
+    try {
+      const snapshot = await cartWishlistVoucherService.updateCartItem(bookId, {
+        soLuong: clampedQty,
+      });
+      await syncSnapshotAndRevalidateVoucher(snapshot, appliedVoucher);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể cập nhật số lượng.');
+    }
   };
 
-  const removeFromCart = (bookId: string) => {
-    setItems((prev) => prev.filter((item) => item.book.id !== bookId));
+  const removeFromCart = async (bookId: string) => {
+    if (!isAuthenticated) return;
+    setCartError(null);
+    try {
+      const snapshot = await cartWishlistVoucherService.removeCartItem(bookId);
+      await syncSnapshotAndRevalidateVoucher(snapshot, appliedVoucher);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể xóa sách khỏi giỏ hàng.');
+    }
   };
 
-  const toggleSelect = (bookId: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.book.id === bookId ? { ...item, selected: !item.selected } : item
-      )
-    );
+  const toggleSelect = async (bookId: string) => {
+    if (!isAuthenticated) return;
+    const target = items.find((entry) => entry.book.id === bookId);
+    if (!target) return;
+    setCartError(null);
+    try {
+      const snapshot = await cartWishlistVoucherService.updateCartItem(bookId, {
+        daChon: !target.selected,
+      });
+      await syncSnapshotAndRevalidateVoucher(snapshot, appliedVoucher);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể cập nhật trạng thái chọn.');
+    }
   };
 
-  const toggleSelectAll = (selectAll: boolean) => {
-    setItems((prev) => prev.map((item) => ({ ...item, selected: selectAll })));
+  const toggleSelectAll = async (selectAll: boolean) => {
+    if (!isAuthenticated) return;
+    setCartError(null);
+    try {
+      const snapshot = await cartWishlistVoucherService.selectAllCartItems(selectAll);
+      await syncSnapshotAndRevalidateVoucher(snapshot, appliedVoucher);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : 'Không thể cập nhật chọn tất cả.');
+    }
+  };
+
+  const applyVoucherCode = async (code: string): Promise<boolean> => {
+    if (!isAuthenticated) {
+      setVoucherError('Vui lòng đăng nhập để kiểm tra và áp dụng mã giảm giá.');
+      return false;
+    }
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setVoucherError('Vui lòng nhập mã giảm giá.');
+      return false;
+    }
+
+    setVoucherError(null);
+    try {
+      const res = await cartWishlistVoucherService.validateVoucher(trimmed);
+      setAppliedVoucher(res.voucher);
+      setDiscountAmount(res.discountAmount);
+      return true;
+    } catch (err) {
+      setAppliedVoucher(null);
+      setDiscountAmount(0);
+      setVoucherError(err instanceof Error ? err.message : 'Mã giảm giá chưa hợp lệ.');
+      return false;
+    }
+  };
+
+  const clearVoucher = () => {
+    setAppliedVoucher(null);
+    setDiscountAmount(0);
+    setVoucherError(null);
+  };
+
+  // Khi nối Bước 6 đặt hàng, checkout vẫn tạm gọi hàm này để dọn các món đã chọn ở client
+  const clearSelectedAfterCheckout = () => {
+    setItems((prev) => prev.filter((item) => !item.selected));
+    setAppliedVoucher(null);
+    setDiscountAmount(0);
+    setVoucherError(null);
   };
 
   const selectedItems = useMemo(() => items.filter((i) => i.selected), [items]);
-
-  const subtotal = useMemo(
-    () =>
-      selectedItems.reduce(
-        (sum, entry) => sum + (entry.book.flashSalePrice ?? entry.book.price) * entry.quantity,
-        0
-      ),
-    [selectedItems]
-  );
-
-  const shippingFee = useMemo(() => {
-    if (selectedItems.length === 0) return 0;
-    return subtotal >= 300000 ? 0 : 25000;
-  }, [selectedItems.length, subtotal]);
-
-  const discountAmount = useMemo(() => {
-    if (!appliedVoucher || selectedItems.length === 0) return 0;
-    if (subtotal < appliedVoucher.minOrderValue) return 0;
-    if (appliedVoucher.discountType === 'FIXED') {
-      return appliedVoucher.discountValue;
-    }
-    const rawPercent = (subtotal * appliedVoucher.discountValue) / 100;
-    return appliedVoucher.maxDiscountAmount
-      ? Math.min(rawPercent, appliedVoucher.maxDiscountAmount)
-      : rawPercent;
-  }, [appliedVoucher, selectedItems.length, subtotal]);
 
   const finalTotal = useMemo(
     () => Math.max(0, subtotal + shippingFee - discountAmount),
     [subtotal, shippingFee, discountAmount]
   );
 
-  const applyVoucherCode = (code: string): boolean => {
-    setVoucherError(null);
-    const normalized = code.trim().toUpperCase();
-    const found = INITIAL_VOUCHERS.find(
-      (v) => v.code.toUpperCase() === normalized && v.isActive
-    );
-    if (!found) {
-      setVoucherError('Mã giảm giá không tồn tại hoặc đã hết hạn.');
-      return false;
-    }
-    setAppliedVoucher(found);
-    if (subtotal > 0 && subtotal < found.minOrderValue) {
-      setVoucherError(
-        `Đơn hàng cần tối thiểu ${found.minOrderValue.toLocaleString('vi-VN')} đ để kích hoạt mã ${found.code}.`
-      );
-    }
-    return true;
-  };
-
-  const clearVoucher = () => {
-    setAppliedVoucher(null);
-    setVoucherError(null);
-  };
-
-  const clearSelectedAfterCheckout = () => {
-    setItems((prev) => prev.filter((item) => !item.selected));
-    setAppliedVoucher(null);
-  };
-
-  const totalItemsCount = useMemo(
-    () => items.reduce((acc, item) => acc + item.quantity, 0),
-    [items]
-  );
-
   return (
     <CartContext.Provider
       value={{
         items,
+        activeVouchers,
         appliedVoucher,
         voucherError,
+        cartError,
+        isLoadingCart,
         totalItemsCount,
         selectedItems,
         subtotal,
         shippingFee,
         discountAmount,
         finalTotal,
+        refreshCart,
+        clearCartError,
         addToCart,
         updateQuantity,
         removeFromCart,
@@ -183,4 +313,3 @@ export function useCart(): CartContextValue {
   }
   return ctx;
 }
-

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -21,17 +21,18 @@ import {
   Voucher,
   formatCurrencyVND,
 } from '@shared/types';
-import { INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { orderService } from '@/services/orderService';
+import { EmptyStateView } from '@/components/common/StateViews';
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const {
     selectedItems,
+    activeVouchers,
     appliedVoucher,
     voucherError,
     subtotal,
@@ -57,17 +58,29 @@ export default function CheckoutScreen() {
   const [voucherModalVisible, setVoucherModalVisible] = useState(false);
   const [voucherInput, setVoucherInput] = useState(appliedVoucher?.code || '');
 
+  useEffect(() => {
+    if (addresses.length > 0 && !addresses.some((a) => a.id === selectedAddressId)) {
+      setSelectedAddressId(addresses.find((a) => a.isDefault)?.id || addresses[0].id);
+    }
+  }, [addresses, selectedAddressId]);
+
+  // Chốt chặn chưa đăng nhập: không cho khách vãng lai mở màn Thanh toán / Đặt hàng
+  if (!isAuthenticated || !user) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <EmptyStateView
+          icon="lock-closed-outline"
+          title="Vui lòng đăng nhập để thanh toán"
+          description="Bạn cần đăng nhập tài khoản khách hàng trước khi chọn địa chỉ giao hàng và đặt đơn."
+          actionLabel="Đăng nhập ngay"
+          onAction={() => router.replace('/(tabs)/profile')}
+        />
+      </SafeAreaView>
+    );
+  }
+
   const chosenAddress =
-    addresses.find((a) => a.id === selectedAddressId) || {
-      id: 'addr-default',
-      fullName: user?.fullName || 'Nguyễn Minh Tuấn',
-      phone: user?.phone || '0908123456',
-      province: 'TP. Hồ Chí Minh',
-      district: 'Quận 1',
-      ward: 'Phường Bến Nghé',
-      streetAddress: 'Tòa nhà Bitexco, Số 2 Hải Triều',
-      isDefault: true,
-    };
+    addresses.find((a) => a.id === selectedAddressId) || addresses[0] || null;
 
   // Tính số tiền giảm dự kiến của từng Voucher đối với đơn hiện tại
   const calcEstimatedSaving = (v: Voucher): number => {
@@ -77,16 +90,16 @@ export default function CheckoutScreen() {
     return v.maxDiscountAmount ? Math.min(raw, v.maxDiscountAmount) : raw;
   };
 
-  const handleSelectVoucher = (v: Voucher) => {
+  const handleSelectVoucher = async (v: Voucher) => {
     setVoucherInput(v.code);
-    const ok = applyVoucherCode(v.code);
+    const ok = await applyVoucherCode(v.code);
     if (ok) {
       setVoucherModalVisible(false);
     }
   };
 
   const handlePlaceOrder = async () => {
-    if (selectedItems.length === 0 || isSubmitting) return;
+    if (!chosenAddress || selectedItems.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
       const newOrder = await orderService.createOrder({
@@ -194,33 +207,45 @@ export default function CheckoutScreen() {
               <Text style={styles.cardTitle}>Địa chỉ nhận hàng</Text>
             </View>
 
-            {addresses.map((addr) => {
-              const active = addr.id === chosenAddress.id;
-              return (
-                <Pressable
-                  key={addr.id}
-                  onPress={() => setSelectedAddressId(addr.id)}
-                  style={[
-                    styles.addressOption,
-                    active && styles.addressOptionActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={active ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={active ? colors.primary : colors.textMuted}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.addrName}>
-                      {addr.fullName} • {addr.phone}
-                    </Text>
-                    <Text style={styles.addrStreet}>
-                      {addr.streetAddress}, {addr.ward}, {addr.district}, {addr.province}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+            {addresses.length === 0 ? (
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={[styles.addressOption, { justifyContent: 'space-between' }]}
+              >
+                <Text style={styles.addrStreet}>
+                  Bạn chưa có địa chỉ nhận hàng. Chạm để thêm địa chỉ trong Tài khoản.
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+              </Pressable>
+            ) : (
+              addresses.map((addr) => {
+                const active = addr.id === chosenAddress?.id;
+                return (
+                  <Pressable
+                    key={addr.id}
+                    onPress={() => setSelectedAddressId(addr.id)}
+                    style={[
+                      styles.addressOption,
+                      active && styles.addressOptionActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={active ? colors.primary : colors.textMuted}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addrName}>
+                        {addr.fullName} • {addr.phone}
+                      </Text>
+                      <Text style={styles.addrStreet}>
+                        {addr.streetAddress}, {addr.ward}, {addr.district}, {addr.province}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
           </View>
 
           {/* 2. SẢN PHẨM ĐẶT MUA (Có chỉnh số lượng trực tiếp như Shopee/Tiki) */}
@@ -328,17 +353,17 @@ export default function CheckoutScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.quickTicketScroll}
             >
-              {INITIAL_VOUCHERS.map((v) => {
+              {activeVouchers.map((v) => {
                 const isEligible = subtotal >= v.minOrderValue;
                 const isSelected = appliedVoucher?.code === v.code && discountAmount > 0;
                 return (
                   <Pressable
                     key={v.id}
-                    onPress={() => {
+                    onPress={async () => {
                       if (isSelected) {
                         clearVoucher();
                       } else if (isEligible) {
-                        applyVoucherCode(v.code);
+                        await applyVoucherCode(v.code);
                       } else {
                         setVoucherModalVisible(true);
                       }
@@ -526,9 +551,10 @@ export default function CheckoutScreen() {
           </View>
           <Pressable
             onPress={handlePlaceOrder}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !chosenAddress}
             style={({ pressed }) => [
               styles.confirmBtn,
+              (isSubmitting || !chosenAddress) && { opacity: 0.5 },
               pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
             ]}
           >
@@ -566,8 +592,8 @@ export default function CheckoutScreen() {
                   style={styles.modalTextInput}
                 />
                 <Pressable
-                  onPress={() => {
-                    const ok = applyVoucherCode(voucherInput);
+                  onPress={async () => {
+                    const ok = await applyVoucherCode(voucherInput);
                     if (ok) setVoucherModalVisible(false);
                   }}
                   style={styles.modalApplyBtn}
@@ -582,7 +608,7 @@ export default function CheckoutScreen() {
 
               {/* Danh sách tất cả Voucher */}
               <ScrollView contentContainerStyle={styles.modalVoucherList}>
-                {INITIAL_VOUCHERS.map((v) => {
+                {activeVouchers.map((v) => {
                   const isEligible = subtotal >= v.minOrderValue;
                   const isSelected = appliedVoucher?.code === v.code && discountAmount > 0;
                   const saving = calcEstimatedSaving(v);

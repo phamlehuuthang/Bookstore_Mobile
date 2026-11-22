@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Book, formatCurrencyVND } from '@shared/types';
 import { colors } from '@/theme/colors';
+import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 
 interface BookCardProps {
@@ -13,6 +14,7 @@ interface BookCardProps {
 
 export function BookCard({ book, compact = false }: BookCardProps) {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const { addToCart } = useCart();
   const effectivePrice = book.flashSalePrice ?? book.price;
   const discountPercent =
@@ -73,7 +75,12 @@ export function BookCard({ book, compact = false }: BookCardProps) {
             hitSlop={8}
             onPress={(e) => {
               e.stopPropagation();
-              addToCart(book, 1);
+              // Chốt chặn chưa đăng nhập chuẩn TMĐT: chưa có phiên CUSTOMER -> đưa sang màn Đăng nhập
+              if (!isAuthenticated) {
+                router.push('/(tabs)/profile');
+                return;
+              }
+              void addToCart(book, 1);
             }}
             style={({ pressed }) => [
               styles.addCartBtn,
