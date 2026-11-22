@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,24 +13,36 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { formatCurrencyVND } from '@shared/types';
+import { Address, formatCurrencyVND } from '@shared/types';
 import { INITIAL_BOOKS, INITIAL_VOUCHERS } from '@shared/api-client/mockData';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/hooks/useAuth';
+import { ApiError } from '@/services/httpClient';
 
 type ProfileSection = 'ADDRESSES' | 'VOUCHERS' | 'WISHLIST' | 'NOTIFICATIONS' | 'FAQ';
 type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_OTP';
+type AuthAlertKind = 'LOCKED' | 'RESTRICTED' | 'ERROR';
+
+interface AuthAlertState {
+  kind: AuthAlertKind;
+  title: string;
+  message: string;
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
   const {
     user,
+    isHydrating,
     wishlistBookIds,
     notifications,
     login,
     register,
     logout,
+    updateProfile,
+    changePassword,
     saveAddress,
+    setDefaultAddress,
     deleteAddress,
     toggleWishlist,
     markAllNotificationsRead,
@@ -37,66 +50,316 @@ export default function ProfileScreen() {
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('ADDRESSES');
 
-  // Auth Form State (When logged out or testing Role Guard)
+  // Cụm 1: State cho màn hình Đăng nhập / Đăng ký (để trống hoàn toàn, không điền sẵn chữ mẫu)
   const [authMode, setAuthMode] = useState<AuthMode>('LOGIN');
-  const [email, setEmail] = useState('minhtuan@gmail.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<AuthAlertState | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
 
-  // New Address State
-  const [showAddAddress, setShowAddAddress] = useState(false);
+  // Cụm 2: State cho 2 hộp Sửa hồ sơ & Đổi mật khẩu (chỉ mở 1 hộp tại 1 thời điểm)
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [profileNotice, setProfileNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isProfileSubmitting, setIsProfileSubmitting] = useState(false);
+
+  // Cụm 3: Form Sổ địa chỉ dùng chung cho cả Thêm mới (editingAddressId = null) và Sửa (editingAddressId = ID địa chỉ đang sửa)
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addrName, setAddrName] = useState('');
   const [addrPhone, setAddrPhone] = useState('');
   const [addrStreet, setAddrStreet] = useState('');
-  const [addrDistrict, setAddrDistrict] = useState('Quận 3');
-  const [addrProvince, setAddrProvince] = useState('TP. Hồ Chí Minh');
+  const [addrWard, setAddrWard] = useState('');
+  const [addrDistrict, setAddrDistrict] = useState('');
+  const [addrProvince, setAddrProvince] = useState('');
+  const [addrIsDefault, setAddrIsDefault] = useState(true);
+  const [addrNotice, setAddrNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isAddrSubmitting, setIsAddrSubmitting] = useState(false);
 
-  const handleAuthSubmit = async () => {
+  // Phân loại lỗi trả về từ Backend thành 3 trạng thái thông báo chuẩn ứng dụng TMĐT
+  const buildAuthAlert = (err: unknown, mode: AuthMode): AuthAlertState => {
+    const message = err instanceof Error ? err.message : 'Không thể xác thực lúc này. Vui lòng thử lại.';
+    const lower = message.toLowerCase();
+
+    if (lower.includes('tạm khóa') || lower.includes('bị khóa')) {
+      return {
+        kind: 'LOCKED',
+        title: 'Tài khoản đang tạm khóa',
+        message,
+      };
+    }
+
+    if (
+      (err instanceof ApiError && err.status === 403) ||
+      lower.includes('không hỗ trợ đăng nhập') ||
+      lower.includes('quản trị')
+    ) {
+      return {
+        kind: 'RESTRICTED',
+        title: 'Không thể đăng nhập bằng tài khoản này',
+        message,
+      };
+    }
+
+    return {
+      kind: 'ERROR',
+      title: mode === 'REGISTER' ? 'Đăng ký chưa thành công' : 'Đăng nhập chưa thành công',
+      message,
+    };
+  };
+
+  const switchAuthMode = (nextMode: AuthMode) => {
+    setAuthMode(nextMode);
     setAuthError(null);
     setAuthSuccess(null);
+    setPassword('');
+    setShowPassword(false);
+  };
+
+  const handleAuthSubmit = async () => {
+    if (isAuthSubmitting) return;
+    setAuthError(null);
+    setAuthSuccess(null);
+
+    if (authMode === 'FORGOT_OTP') {
+      setAuthError({
+        kind: 'RESTRICTED',
+        title: 'Tính năng đang được cập nhật',
+        message:
+          'Khôi phục mật khẩu qua OTP sẽ sớm được hỗ trợ. Nếu cần cấp lại mật khẩu, vui lòng liên hệ CSKH 1900 6886.',
+      });
+      return;
+    }
+
+    if (authMode === 'LOGIN' && (!email.trim() || !password)) {
+      setAuthError({
+        kind: 'ERROR',
+        title: 'Thiếu thông tin đăng nhập',
+        message: 'Vui lòng nhập đầy đủ địa chỉ email và mật khẩu.',
+      });
+      return;
+    }
+
+    if (authMode === 'REGISTER' && (!fullName.trim() || !email.trim() || !password)) {
+      setAuthError({
+        kind: 'ERROR',
+        title: 'Thiếu thông tin đăng ký',
+        message: 'Vui lòng nhập họ tên, địa chỉ email và mật khẩu (tối thiểu 6 ký tự).',
+      });
+      return;
+    }
+
+    setIsAuthSubmitting(true);
     try {
       if (authMode === 'LOGIN') {
         await login(email, password);
-      } else if (authMode === 'REGISTER') {
+      } else {
         await register({
-          fullName: fullName || 'Độc giả mới',
-          email,
-          phone: phone || '0901234567',
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
           password,
         });
-      } else {
-        setAuthSuccess(
-          `Mã OTP 6 số đã gửi tới ${email}. Mật khẩu của bạn đã được đặt lại thành công!`
-        );
-        setAuthMode('LOGIN');
       }
+      setPassword('');
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Đăng nhập thất bại');
+      setAuthError(buildAuthAlert(err, authMode));
+    } finally {
+      setIsAuthSubmitting(false);
     }
   };
 
-  const handleSaveNewAddress = async () => {
-    if (!addrStreet.trim()) return;
-    await saveAddress({
-      fullName: addrName.trim() || user?.fullName || 'Khách hàng',
-      phone: addrPhone.trim() || user?.phone || '0908123456',
-      province: addrProvince,
-      district: addrDistrict,
-      ward: 'Phường Võ Thị Sáu',
-      streetAddress: addrStreet.trim(),
-      isDefault: true,
-    });
+  const handleLogout = () => {
+    logout();
+    setPassword('');
+    setAuthError(null);
+    setAuthSuccess(null);
+  };
+
+  const openEditProfile = () => {
+    if (!user) return;
+    setEditFullName(user.fullName);
+    setEditPhone(user.phone);
+    setShowEditProfile((prev) => !prev);
+    setShowChangePassword(false);
+    setProfileNotice(null);
+  };
+
+  const openChangePassword = () => {
+    setOldPassword('');
+    setNewPassword('');
+    setShowChangePassword((prev) => !prev);
+    setShowEditProfile(false);
+    setProfileNotice(null);
+  };
+
+  const handleSaveProfile = async () => {
+    if (isProfileSubmitting) return;
+    setProfileNotice(null);
+    setIsProfileSubmitting(true);
+    try {
+      await updateProfile(editFullName, editPhone);
+      setShowEditProfile(false);
+      setProfileNotice({ type: 'success', text: 'Đã cập nhật thông tin hồ sơ thành công.' });
+    } catch (err) {
+      setProfileNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Cập nhật hồ sơ thất bại.',
+      });
+    } finally {
+      setIsProfileSubmitting(false);
+    }
+  };
+
+  const handleChangePasswordSubmit = async () => {
+    if (isProfileSubmitting) return;
+    setProfileNotice(null);
+    setIsProfileSubmitting(true);
+    try {
+      await changePassword(oldPassword, newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setShowChangePassword(false);
+      setProfileNotice({ type: 'success', text: 'Đổi mật khẩu thành công.' });
+    } catch (err) {
+      setProfileNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Đổi mật khẩu thất bại.',
+      });
+    } finally {
+      setIsProfileSubmitting(false);
+    }
+  };
+
+  const openCreateAddress = () => {
+    if (showAddressForm && !editingAddressId) {
+      setShowAddressForm(false);
+      return;
+    }
+    setEditingAddressId(null);
+    setAddrName(user?.fullName || '');
+    setAddrPhone(user?.phone || '');
     setAddrStreet('');
-    setShowAddAddress(false);
+    setAddrWard('');
+    setAddrDistrict('');
+    setAddrProvince('');
+    // Khi tạo mới mặc định bật checkbox đặt làm mặc định (Quy tắc 2A cũng tự ép true nếu đây là địa chỉ đầu tiên)
+    setAddrIsDefault(true);
+    setAddrNotice(null);
+    setShowAddressForm(true);
+  };
+
+  const openEditAddress = (addr: Address) => {
+    // Nạp lại dữ liệu của địa chỉ đang chọn vào form và gắn editingAddressId để handleSaveAddressForm gửi PUT thay vì POST
+    setEditingAddressId(addr.id);
+    setAddrName(addr.fullName);
+    setAddrPhone(addr.phone);
+    setAddrStreet(addr.streetAddress);
+    setAddrWard(addr.ward);
+    setAddrDistrict(addr.district);
+    setAddrProvince(addr.province);
+    setAddrIsDefault(addr.isDefault);
+    setAddrNotice(null);
+    setShowAddressForm(true);
+  };
+
+  const handleSaveAddressForm = async () => {
+    if (isAddrSubmitting) return;
+    setAddrNotice(null);
+    setIsAddrSubmitting(true);
+    try {
+      // Nếu editingAddressId có giá trị -> authService sẽ gọi PUT /addresses/{id}; nếu undefined -> gọi POST /addresses
+      await saveAddress({
+        id: editingAddressId || undefined,
+        fullName: addrName,
+        phone: addrPhone,
+        province: addrProvince,
+        district: addrDistrict,
+        ward: addrWard,
+        streetAddress: addrStreet,
+        isDefault: addrIsDefault,
+      });
+      setShowAddressForm(false);
+      setEditingAddressId(null);
+      setAddrStreet('');
+      setAddrNotice({
+        type: 'success',
+        text: editingAddressId
+          ? 'Đã cập nhật địa chỉ nhận hàng.'
+          : 'Đã thêm địa chỉ nhận hàng mới.',
+      });
+    } catch (err) {
+      setAddrNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Không thể lưu địa chỉ.',
+      });
+    } finally {
+      setIsAddrSubmitting(false);
+    }
+  };
+
+  const handleSetDefault = async (addressId: string) => {
+    if (isAddrSubmitting) return;
+    setAddrNotice(null);
+    setIsAddrSubmitting(true);
+    try {
+      await setDefaultAddress(addressId);
+      setAddrNotice({ type: 'success', text: 'Đã đặt làm địa chỉ mặc định.' });
+    } catch (err) {
+      setAddrNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Không thể đặt địa chỉ mặc định.',
+      });
+    } finally {
+      setIsAddrSubmitting(false);
+    }
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    if (isAddrSubmitting) return;
+    setAddrNotice(null);
+    setIsAddrSubmitting(true);
+    try {
+      await deleteAddress(addressId);
+      if (editingAddressId === addressId) {
+        setEditingAddressId(null);
+        setShowAddressForm(false);
+      }
+      setAddrNotice({ type: 'success', text: 'Đã xóa địa chỉ nhận hàng.' });
+    } catch (err) {
+      setAddrNotice({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Không thể xóa địa chỉ.',
+      });
+    } finally {
+      setIsAddrSubmitting(false);
+    }
   };
 
   const wishlistBooks = INITIAL_BOOKS.filter((b) => wishlistBookIds.includes(b.id));
 
-  // IF NOT LOGGED IN: SHOW AUTHENTICATION VIEW (WITH ROLE GUARD VERIFICATION)
+  // Cổng chờ 1: khi app vừa mở và AuthProvider đang gọi /auth/me kiểm tra JWT cũ -> hiện vòng xoay thay vì nháy màn Login
+  if (isHydrating) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.authSubtitle}>Đang khôi phục phiên đăng nhập...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Cổng chờ 2: chưa đăng nhập (hoặc token đã hết hạn) -> hiển thị form Đăng nhập / Đăng ký
   if (!user) {
     return (
       <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -121,10 +384,7 @@ export default function ProfileScreen() {
             {/* Auth Mode Switcher */}
             <View style={styles.authTabs}>
               <Pressable
-                onPress={() => {
-                  setAuthMode('LOGIN');
-                  setAuthError(null);
-                }}
+                onPress={() => switchAuthMode('LOGIN')}
                 style={[styles.authTab, authMode === 'LOGIN' && styles.authTabActive]}
               >
                 <Text
@@ -137,10 +397,7 @@ export default function ProfileScreen() {
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => {
-                  setAuthMode('REGISTER');
-                  setAuthError(null);
-                }}
+                onPress={() => switchAuthMode('REGISTER')}
                 style={[styles.authTab, authMode === 'REGISTER' && styles.authTabActive]}
               >
                 <Text
@@ -153,10 +410,7 @@ export default function ProfileScreen() {
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => {
-                  setAuthMode('FORGOT_OTP');
-                  setAuthError(null);
-                }}
+                onPress={() => switchAuthMode('FORGOT_OTP')}
                 style={[styles.authTab, authMode === 'FORGOT_OTP' && styles.authTabActive]}
               >
                 <Text
@@ -171,11 +425,63 @@ export default function ProfileScreen() {
             </View>
 
             {authError ? (
-              <View style={styles.errorAlert}>
-                <Ionicons name="alert-circle" size={20} color={colors.danger} />
-                <Text selectable style={styles.errorAlertText}>
-                  {authError}
-                </Text>
+              <View
+                style={[
+                  styles.authAlertCard,
+                  authError.kind === 'RESTRICTED'
+                    ? styles.authAlertAmber
+                    : styles.authAlertDanger,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.authAlertIconWrap,
+                    authError.kind === 'RESTRICTED'
+                      ? styles.authAlertIconAmber
+                      : styles.authAlertIconDanger,
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      authError.kind === 'LOCKED'
+                        ? 'lock-closed-outline'
+                        : authError.kind === 'RESTRICTED'
+                          ? 'information-circle-outline'
+                          : 'alert-circle-outline'
+                    }
+                    size={19}
+                    color={authError.kind === 'RESTRICTED' ? '#B45309' : colors.danger}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text
+                    style={[
+                      styles.authAlertTitle,
+                      authError.kind === 'RESTRICTED' && { color: '#92400E' },
+                    ]}
+                  >
+                    {authError.title}
+                  </Text>
+                  <Text
+                    selectable
+                    style={[
+                      styles.authAlertBody,
+                      authError.kind === 'RESTRICTED' && { color: '#78350F' },
+                    ]}
+                  >
+                    {authError.message}
+                  </Text>
+                  {authError.kind === 'RESTRICTED' && authMode === 'LOGIN' ? (
+                    <Pressable
+                      onPress={() => switchAuthMode('REGISTER')}
+                      style={styles.authAlertActionBtn}
+                    >
+                      <Text style={styles.authAlertActionText}>
+                        Tạo tài khoản khách hàng mới →
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             ) : null}
 
@@ -193,14 +499,16 @@ export default function ProfileScreen() {
                   <TextInput
                     value={fullName}
                     onChangeText={setFullName}
-                    placeholder="Nguyễn Minh Tuấn"
+                    placeholder="Nhập họ và tên"
+                    placeholderTextColor={colors.textMuted}
                     style={styles.input}
                   />
                   <Text style={styles.inputLabel}>Số điện thoại</Text>
                   <TextInput
                     value={phone}
                     onChangeText={setPhone}
-                    placeholder="0908123456"
+                    placeholder="Nhập số điện thoại"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="phone-pad"
                     style={styles.input}
                   />
@@ -211,8 +519,10 @@ export default function ProfileScreen() {
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="nhapemail@gmail.com"
+                placeholder="Nhập địa chỉ email"
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
+                autoCorrect={false}
                 keyboardType="email-address"
                 style={styles.input}
               />
@@ -220,13 +530,33 @@ export default function ProfileScreen() {
               {authMode !== 'FORGOT_OTP' ? (
                 <>
                   <Text style={styles.inputLabel}>Mật khẩu</Text>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
-                    secureTextEntry
-                    style={styles.input}
-                  />
+                  <View style={styles.passwordWrap}>
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder={
+                        authMode === 'REGISTER'
+                          ? 'Tạo mật khẩu (tối thiểu 6 ký tự)'
+                          : 'Nhập mật khẩu'
+                      }
+                      placeholderTextColor={colors.textMuted}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      style={styles.passwordInput}
+                    />
+                    <Pressable
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      hitSlop={8}
+                      style={styles.eyeBtn}
+                      accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </Pressable>
+                  </View>
                 </>
               ) : (
                 <>
@@ -234,20 +564,27 @@ export default function ProfileScreen() {
                   <TextInput
                     value={otpCode}
                     onChangeText={setOtpCode}
-                    placeholder="Nhập mã OTP gửi về điện thoại"
+                    placeholder="Nhập mã OTP"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="numeric"
                     style={styles.input}
                   />
                 </>
               )}
 
-              <Pressable onPress={handleAuthSubmit} style={styles.primaryBtn}>
+              <Pressable
+                onPress={handleAuthSubmit}
+                disabled={isAuthSubmitting}
+                style={[styles.primaryBtn, isAuthSubmitting && { opacity: 0.7 }]}
+              >
                 <Text style={styles.primaryBtnText}>
-                  {authMode === 'LOGIN'
-                    ? 'Đăng nhập ngay'
-                    : authMode === 'REGISTER'
-                    ? 'Tạo tài khoản mới'
-                    : 'Xác nhận OTP & Đặt lại mật khẩu'}
+                  {isAuthSubmitting
+                    ? 'Đang xử lý...'
+                    : authMode === 'LOGIN'
+                      ? 'Đăng nhập ngay'
+                      : authMode === 'REGISTER'
+                        ? 'Tạo tài khoản mới'
+                        : 'Xác nhận OTP & Đặt lại mật khẩu'}
                 </Text>
               </Pressable>
             </View>
@@ -268,7 +605,8 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarInitials}>
               {user.fullName
-                .split(' ')
+                .trim()
+                .split(/\s+/)
                 .slice(-2)
                 .map((w) => w[0])
                 .join('')}
@@ -277,19 +615,111 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{user.fullName}</Text>
             <Text style={styles.profileMeta}>
-              {user.phone} • {user.email}
+              {user.phone || 'Chưa có SĐT'} • {user.email}
             </Text>
             <View style={styles.memberBadge}>
               <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
               <Text style={styles.memberBadgeText}>
-                Thành viên Vàng • Chi tiêu {formatCurrencyVND(user.totalSpent)}
+                {user.orderCount} đơn hàng • Chi tiêu {formatCurrencyVND(user.totalSpent)}
               </Text>
             </View>
+            <View style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}>
+              <Pressable onPress={openEditProfile}>
+                <Text style={styles.actionLink}>
+                  {showEditProfile ? 'Đóng sửa hồ sơ' : 'Sửa hồ sơ'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={openChangePassword}>
+                <Text style={styles.actionLink}>
+                  {showChangePassword ? 'Đóng đổi mật khẩu' : 'Đổi mật khẩu'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
-          <Pressable onPress={logout} style={styles.logoutBtn}>
+          <Pressable onPress={handleLogout} style={styles.logoutBtn}>
             <Ionicons name="log-out-outline" size={20} color={colors.danger} />
           </Pressable>
         </View>
+
+        {profileNotice ? (
+          <View
+            style={
+              profileNotice.type === 'error' ? styles.errorAlert : styles.successAlert
+            }
+          >
+            <Ionicons
+              name={profileNotice.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+              size={18}
+              color={profileNotice.type === 'error' ? colors.danger : colors.primary}
+            />
+            <Text
+              style={
+                profileNotice.type === 'error'
+                  ? styles.errorAlertText
+                  : styles.successAlertText
+              }
+            >
+              {profileNotice.text}
+            </Text>
+          </View>
+        ) : null}
+
+        {showEditProfile ? (
+          <View style={styles.addAddrCard}>
+            <Text style={styles.sectionTitle}>Cập nhật hồ sơ cá nhân</Text>
+            <TextInput
+              value={editFullName}
+              onChangeText={setEditFullName}
+              placeholder="Họ và tên"
+              style={styles.input}
+            />
+            <TextInput
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Số điện thoại"
+              keyboardType="phone-pad"
+              style={styles.input}
+            />
+            <Pressable
+              onPress={handleSaveProfile}
+              disabled={isProfileSubmitting}
+              style={[styles.primaryBtn, isProfileSubmitting && { opacity: 0.7 }]}
+            >
+              <Text style={styles.primaryBtnText}>
+                {isProfileSubmitting ? 'Đang lưu...' : 'Lưu thông tin hồ sơ'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {showChangePassword ? (
+          <View style={styles.addAddrCard}>
+            <Text style={styles.sectionTitle}>Đổi mật khẩu đăng nhập</Text>
+            <TextInput
+              value={oldPassword}
+              onChangeText={setOldPassword}
+              placeholder="Mật khẩu hiện tại"
+              secureTextEntry
+              style={styles.input}
+            />
+            <TextInput
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+              secureTextEntry
+              style={styles.input}
+            />
+            <Pressable
+              onPress={handleChangePasswordSubmit}
+              disabled={isProfileSubmitting}
+              style={[styles.primaryBtn, isProfileSubmitting && { opacity: 0.7 }]}
+            >
+              <Text style={styles.primaryBtnText}>
+                {isProfileSubmitting ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Sub-navigation Pills */}
         <ScrollView
@@ -339,15 +769,41 @@ export default function ProfileScreen() {
           <View style={styles.sectionBlock}>
             <View style={styles.sectionTitleRow}>
               <Text style={styles.sectionTitle}>Sổ địa chỉ nhận hàng</Text>
-              <Pressable onPress={() => setShowAddAddress(!showAddAddress)}>
+              <Pressable onPress={openCreateAddress}>
                 <Text style={styles.actionLink}>
-                  {showAddAddress ? 'Đóng' : '+ Thêm địa chỉ'}
+                  {showAddressForm ? 'Đóng' : '+ Thêm địa chỉ'}
                 </Text>
               </Pressable>
             </View>
 
-            {showAddAddress ? (
+            {addrNotice ? (
+              <View
+                style={
+                  addrNotice.type === 'error' ? styles.errorAlert : styles.successAlert
+                }
+              >
+                <Ionicons
+                  name={addrNotice.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+                  size={18}
+                  color={addrNotice.type === 'error' ? colors.danger : colors.primary}
+                />
+                <Text
+                  style={
+                    addrNotice.type === 'error'
+                      ? styles.errorAlertText
+                      : styles.successAlertText
+                  }
+                >
+                  {addrNotice.text}
+                </Text>
+              </View>
+            ) : null}
+
+            {showAddressForm ? (
               <View style={styles.addAddrCard}>
+                <Text style={styles.inputLabel}>
+                  {editingAddressId ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ nhận hàng mới'}
+                </Text>
                 <TextInput
                   value={addrName}
                   onChangeText={setAddrName}
@@ -367,6 +823,12 @@ export default function ProfileScreen() {
                   placeholder="Số nhà, tên đường, tòa nhà..."
                   style={styles.input}
                 />
+                <TextInput
+                  value={addrWard}
+                  onChangeText={setAddrWard}
+                  placeholder="Phường/Xã"
+                  style={styles.input}
+                />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     value={addrDistrict}
@@ -381,9 +843,38 @@ export default function ProfileScreen() {
                     style={[styles.input, { flex: 1 }]}
                   />
                 </View>
-                <Pressable onPress={handleSaveNewAddress} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Lưu địa chỉ mặc định</Text>
+                <Pressable
+                  onPress={() => setAddrIsDefault((prev) => !prev)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                >
+                  <Ionicons
+                    name={addrIsDefault ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.itemCardSub}>Đặt làm địa chỉ nhận hàng mặc định</Text>
                 </Pressable>
+                <Pressable
+                  onPress={handleSaveAddressForm}
+                  disabled={isAddrSubmitting}
+                  style={[styles.primaryBtn, isAddrSubmitting && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {isAddrSubmitting
+                      ? 'Đang lưu...'
+                      : editingAddressId
+                        ? 'Cập nhật địa chỉ'
+                        : 'Lưu địa chỉ'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {user.addresses.length === 0 ? (
+              <View style={styles.itemCard}>
+                <Text style={styles.itemCardSub}>
+                  Bạn chưa lưu địa chỉ nhận hàng nào. Hãy bấm "+ Thêm địa chỉ" để tạo mới.
+                </Text>
               </View>
             ) : null}
 
@@ -405,12 +896,22 @@ export default function ProfileScreen() {
                 <View style={styles.addrActions}>
                   {!addr.isDefault ? (
                     <Pressable
-                      onPress={() => saveAddress({ ...addr, isDefault: true })}
+                      disabled={isAddrSubmitting}
+                      onPress={() => handleSetDefault(addr.id)}
                     >
                       <Text style={styles.actionLink}>Đặt làm mặc định</Text>
                     </Pressable>
                   ) : null}
-                  <Pressable onPress={() => deleteAddress(addr.id)}>
+                  <Pressable
+                    disabled={isAddrSubmitting}
+                    onPress={() => openEditAddress(addr)}
+                  >
+                    <Text style={styles.actionLink}>Sửa</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={isAddrSubmitting}
+                    onPress={() => handleDeleteAddress(addr.id)}
+                  >
                     <Text style={[styles.actionLink, { color: colors.danger }]}>Xóa</Text>
                   </Pressable>
                 </View>
@@ -590,6 +1091,57 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  authAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  authAlertDanger: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  authAlertAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  authAlertIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  authAlertIconDanger: {
+    backgroundColor: '#FEE2E2',
+  },
+  authAlertIconAmber: {
+    backgroundColor: '#FEF3C7',
+  },
+  authAlertTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  authAlertBody: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#7F1D1D',
+    lineHeight: 19,
+  },
+  authAlertActionBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingVertical: 4,
+  },
+  authAlertActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B45309',
+  },
   errorAlert: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -603,7 +1155,7 @@ const styles = StyleSheet.create({
   errorAlertText: {
     flex: 1,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.danger,
     lineHeight: 19,
   },
@@ -643,6 +1195,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     color: colors.textPrimary,
+  },
+  passwordWrap: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingLeft: 12,
+    paddingRight: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    minHeight: 44,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  eyeBtn: {
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryBtn: {
     minHeight: 46,

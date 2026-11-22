@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -27,91 +27,7 @@ import {
 import { db } from '@shared/index';
 import { UserRole } from '@shared/types';
 import { adminStatsService } from '@/services/adminStatsService';
-
-interface StaffAccount {
-  id: string;
-  fullName: string;
-  email: string;
-  role: Exclude<UserRole, 'CUSTOMER'>;
-  roleLabel: string;
-  avatarCode: string;
-}
-
-// Đầy đủ 9 tài khoản nhân sự khớp với bảng tk_nguoi_dung trong PostgreSQL (02_seed_data.sql)
-const STAFF_ACCOUNTS: StaffAccount[] = [
-  {
-    id: 'nd_admin',
-    fullName: 'Phạm Minh Quân',
-    email: 'admin@trithucviet.vn',
-    role: 'ADMIN',
-    roleLabel: 'QUẢN TRỊ VIÊN (ADMIN)',
-    avatarCode: 'MQ',
-  },
-  {
-    id: 'nd_admin2',
-    fullName: 'Nguyễn Hải Đăng',
-    email: 'dang.admin@trithucviet.vn',
-    role: 'ADMIN',
-    roleLabel: 'QUẢN TRỊ VIÊN (ADMIN)',
-    avatarCode: 'HĐ',
-  },
-  {
-    id: 'nd_admin3',
-    fullName: 'Vũ Thị Minh Thư',
-    email: 'thu.admin@trithucviet.vn',
-    role: 'ADMIN',
-    roleLabel: 'QUẢN TRỊ VIÊN (ADMIN)',
-    avatarCode: 'MT',
-  },
-  {
-    id: 'nd_kho',
-    fullName: 'Trần Quốc Đạt',
-    email: 'kho@trithucviet.vn',
-    role: 'WAREHOUSE_MANAGER',
-    roleLabel: 'QUẢN LÝ KHO (WAREHOUSE)',
-    avatarCode: 'QĐ',
-  },
-  {
-    id: 'nd_kho2',
-    fullName: 'Lê Văn Hùng',
-    email: 'hung.kho@trithucviet.vn',
-    role: 'WAREHOUSE_MANAGER',
-    roleLabel: 'QUẢN LÝ KHO (WAREHOUSE)',
-    avatarCode: 'VH',
-  },
-  {
-    id: 'nd_kho3',
-    fullName: 'Đoàn Thị Thanh Tâm',
-    email: 'tam.kho@trithucviet.vn',
-    role: 'WAREHOUSE_MANAGER',
-    roleLabel: 'QUẢN LÝ KHO (WAREHOUSE)',
-    avatarCode: 'TT',
-  },
-  {
-    id: 'nd_cskh',
-    fullName: 'Lê Ngọc Hân',
-    email: 'cskh@trithucviet.vn',
-    role: 'CSKH',
-    roleLabel: 'CHĂM SÓC KHÁCH HÀNG (CSKH)',
-    avatarCode: 'NH',
-  },
-  {
-    id: 'nd_cskh2',
-    fullName: 'Nguyễn Phương Nhi',
-    email: 'nhi.cskh@trithucviet.vn',
-    role: 'CSKH',
-    roleLabel: 'CHĂM SÓC KHÁCH HÀNG (CSKH)',
-    avatarCode: 'PN',
-  },
-  {
-    id: 'nd_cskh3',
-    fullName: 'Trương Hoàng Long',
-    email: 'long.cskh@trithucviet.vn',
-    role: 'CSKH',
-    roleLabel: 'CHĂM SÓC KHÁCH HÀNG (CSKH)',
-    avatarCode: 'HL',
-  },
-];
+import { StaffAccount, adminAuthService } from '@/services/adminAuthService';
 
 interface NavItemConfig {
   to: string;
@@ -179,13 +95,38 @@ export const AdminLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  const [currentStaff, setCurrentStaff] = useState<StaffAccount | null>(STAFF_ACCOUNTS[0]);
+  // Trạng thái phiên nhân sự: bắt đầu là null và kiểm tra JWT cũ qua /auth/me để tránh tự đăng nhập tài khoản cứng
+  const [currentStaff, setCurrentStaff] = useState<StaffAccount | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [forgotModalInfo, setForgotModalInfo] = useState(false);
+
+  // Chạy 1 lần lúc mount layout (hoặc sau khi F5) để khôi phục phiên từ token lưu trong localStorage/sessionStorage
+  useEffect(() => {
+    // Biến `mounted` ngăn việc gọi setState nếu người dùng đã rời khỏi component trước khi fetch xong
+    let mounted = true;
+    adminAuthService
+      .restoreAdminSession()
+      .then((staff) => {
+        if (mounted && staff) {
+          setCurrentStaff(staff);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setIsCheckingSession(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const lowStockBooks = db.books.filter(
     (b) => b.stock < db.storeConfig.lowStockThreshold
@@ -195,11 +136,13 @@ export const AdminLayout: React.FC = () => {
   );
   const alertCount = lowStockBooks.length + pendingReturns.length;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Xử lý submit form đăng nhập: validate sơ bộ ở client rồi gọi POST /api/admin/auth/login để Backend xác thực + check vai trò
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoggingIn) return;
     setLoginError(null);
     setForgotModalInfo(false);
-    const normalized = loginEmail.trim().toLowerCase();
+    const normalized = loginEmail.trim();
 
     if (!normalized) {
       setLoginError('Vui lòng nhập địa chỉ email công vụ.');
@@ -211,41 +154,30 @@ export const AdminLayout: React.FC = () => {
       return;
     }
 
-    // Kiểm tra nếu là email của Khách hàng (CUSTOMER) -> chặn truy cập Web Admin
-    const customerMatch = db.users.find(
-      (u) => u.email.toLowerCase() === normalized && u.role === 'CUSTOMER'
-    );
-    if (
-      customerMatch ||
-      normalized.endsWith('@gmail.com') ||
-      normalized.endsWith('@outlook.com')
-    ) {
-      setLoginError(
-        'Tài khoản này là tài khoản Khách hàng (CUSTOMER), không có quyền truy cập hệ thống quản trị nội bộ.'
+    setIsLoggingIn(true);
+    try {
+      const staff = await adminAuthService.loginAdmin(
+        normalized,
+        loginPassword,
+        rememberMe
       );
-      return;
+      setCurrentStaff(staff);
+      navigate('/');
+    } catch (err) {
+      // Hiển thị nguyên văn thông báo lỗi từ Backend (401 sai mật khẩu, 403 chặn CUSTOMER hoặc tài khoản bị khóa)
+      setLoginError(
+        err instanceof Error
+          ? err.message
+          : 'Đăng nhập thất bại. Vui lòng thử lại.'
+      );
+    } finally {
+      setIsLoggingIn(false);
     }
-
-    const foundStaff =
-      STAFF_ACCOUNTS.find((s) => s.email.toLowerCase() === normalized) ||
-      (normalized === 'admin@bookstore.vn'
-        ? STAFF_ACCOUNTS[0]
-        : normalized === 'kho@bookstore.vn'
-          ? STAFF_ACCOUNTS[3]
-          : normalized === 'cskh@bookstore.vn'
-            ? STAFF_ACCOUNTS[6]
-            : null);
-
-    if (!foundStaff) {
-      setLoginError('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
-      return;
-    }
-
-    setCurrentStaff(foundStaff);
-    navigate('/');
   };
 
+  // Đăng xuất: xóa token khỏi localStorage/sessionStorage và đưa giao diện về màn hình Đăng nhập
   const handleLogout = () => {
+    adminAuthService.logoutAdmin();
     setNotifOpen(false);
     setCurrentStaff(null);
     setLoginPassword('');
@@ -253,7 +185,18 @@ export const AdminLayout: React.FC = () => {
     setForgotModalInfo(false);
   };
 
-  // MÀN HÌNH ĐĂNG NHẬP CHUẨN WEB DOANH NGHIỆP THỰC TẾ
+  // Màn hình chờ ngắn khi vừa F5: giữ trang trắng gọn thay vì nháy màn hình Đăng nhập 0.2s rồi biến mất
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="text-sm font-medium text-slate-600">
+          Đang kiểm tra phiên đăng nhập...
+        </div>
+      </div>
+    );
+  }
+
+  // Nếu chưa có currentStaff (chưa đăng nhập hoặc token hết hạn) -> chặn toàn bộ Dashboard và chỉ render màn Login
   if (!currentStaff) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 md:p-8">
@@ -317,16 +260,18 @@ export const AdminLayout: React.FC = () => {
               </div>
 
               {loginError && (
-                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2.5">
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
                   <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                  <span>{loginError}</span>
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-rose-900">Không thể đăng nhập</div>
+                    <div className="leading-relaxed text-rose-700">{loginError}</div>
+                  </div>
                 </div>
               )}
 
               {forgotModalInfo && (
                 <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs leading-relaxed">
-                  Vui lòng liên hệ Quản trị viên hệ thống (<b>admin@trithucviet.vn</b>)
-                  hoặc phòng CNTT nội bộ để được cấp lại mật khẩu nhân viên.
+                  Vui lòng liên hệ Quản trị viên hệ thống hoặc phòng CNTT nội bộ để được cấp lại mật khẩu nhân viên.
                 </div>
               )}
 
@@ -341,7 +286,7 @@ export const AdminLayout: React.FC = () => {
                       type="email"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="ten.nhanvien@trithucviet.vn"
+                      placeholder="Nhập email công vụ"
                       autoComplete="username"
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     />
@@ -400,9 +345,10 @@ export const AdminLayout: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-sm transition-colors cursor-pointer"
+                  disabled={isLoggingIn}
+                  className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold text-sm shadow-sm transition-colors cursor-pointer"
                 >
-                  Đăng nhập
+                  {isLoggingIn ? 'Đang đăng nhập...' : 'Đăng nhập'}
                 </button>
               </form>
             </div>
@@ -412,12 +358,12 @@ export const AdminLayout: React.FC = () => {
     );
   }
 
-  // Lọc danh sách menu theo đúng vai trò đang đăng nhập
+  // Lọc danh sách mục hiển thị trên thanh menu bên trái theo đúng vai trò nhận từ JWT Backend
   const visibleNavItems = NAV_ITEMS.filter((item) =>
     item.allowedRoles.includes(currentStaff.role)
   );
 
-  // Kiểm tra trang hiện tại có nằm trong quyền của vai trò đang đăng nhập không
+  // Chốt bảo vệ URL tầng Route: nếu nhân sự cố tình gõ đường dẫn không thuộc quyền (vd: CSKH gõ /reports), giao diện sẽ hiện cảnh báo từ chối
   const currentNavRule = NAV_ITEMS.find((item) =>
     item.end
       ? location.pathname === item.to
