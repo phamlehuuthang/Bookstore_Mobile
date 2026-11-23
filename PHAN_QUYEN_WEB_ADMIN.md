@@ -44,7 +44,7 @@ Trong bảng `tk_nguoi_dung`, cột `vai_tro` gồm 4 giá trị:
 | **Sách** (`Books.tsx` - Thêm/Sửa/Ẩn sách, chỉnh giá) | Toàn quyền (Thêm, Sửa, Xóa/Ẩn, chỉnh giá bán & Flash Sale) | Thêm/Sửa thông tin sách, cập nhật tồn kho (**không** được tự ý chỉnh giá bán/Flash Sale hoặc xóa sách) | Chỉ xem để tra cứu tư vấn (**không** được Thêm/Sửa/Xóa) |
 | **Danh mục, Tác giả, NXB** (`Categories.tsx`) | Toàn quyền | Thêm/Sửa danh mục, tác giả, NXB khi nhập sách mới | Chỉ xem |
 | **Nhập kho & Tồn kho** (`Inventory.tsx` - Phiếu nhập `phieu_nhap_kho`) | Toàn quyền | **Toàn quyền** (Tạo phiếu nhập kho, nhập số lượng, giá nhập, kiểm kê tồn) | **Không được dùng** |
-| **Đơn hàng & Đổi trả** (`Orders.tsx` - `don_hang`, `yeu_cau_doi_tra`) | Toàn quyền | Xem đơn cần xuất kho, chuyển trạng thái `PENDING` → `PREPARING` → `SHIPPING` (**không** duyệt hoàn tiền/đổi trả) | Xác nhận đơn, liên hệ khách, xử lý `yeu_cau_doi_tra` (Duyệt/Từ chối đổi trả) |
+| **Đơn hàng & Đổi trả** (`Orders.tsx` - `don_hang`, `yeu_cau_doi_tra`) | Toàn quyền mọi chuyển trạng thái 1 chiều, hủy đơn ở `CHO_XAC_NHAN` / `DANG_DONG_GOI` & duyệt đổi trả | Chỉ chuyển trạng thái đóng gói & xuất kho: `CHO_XAC_NHAN` → `DANG_DONG_GOI` → `DANG_GIAO` (**không** xác nhận `DA_GIAO`, **không** hủy đơn, **không** duyệt đổi trả) | Xác nhận đơn (`CHO_XAC_NHAN` → `DANG_DONG_GOI`), hủy đơn ở `CHO_XAC_NHAN` / `DANG_DONG_GOI`, xác nhận `DA_GIAO` (`DANG_GIAO` → `DA_GIAO`) & duyệt/từ chối `yeu_cau_doi_tra` (**không** tự xuất kho `DANG_DONG_GOI` → `DANG_GIAO`) |
 | **Mã giảm giá** (`Vouchers.tsx` - `ma_giam_gia`) | Toàn quyền (Tạo, Sửa, Bật/Tắt mã) | **Không được dùng** | Chỉ xem mã đang chạy để gửi cho khách (**không** được Tạo/Sửa/Tắt mã) |
 | **Khách hàng & Nhân sự** (`CustomersStaff.tsx` - `tk_nguoi_dung`) | Toàn quyền (Quản lý khách + Tạo/Khóa/Phân quyền nhân viên) | **Không được dùng** | Xem thông tin khách hàng để hỗ trợ đơn (**không** được khóa tài khoản hay xem/sửa nhân sự) |
 | **Báo cáo, Đánh giá & Cài đặt** (`ReportsSettings.tsx`) | Toàn quyền (Xem báo cáo tài chính, ẩn/hiện đánh giá, gửi thông báo, cấu hình hệ thống) | **Không được dùng** | Ẩn/Hiện bình luận vi phạm (`danh_gia`), gửi thông báo hỗ trợ (`thong_bao`); **không** xem báo cáo doanh thu & cài đặt hệ thống |
@@ -62,22 +62,23 @@ Trong bảng `tk_nguoi_dung`, cột `vai_tro` gồm 4 giá trị:
   - Tạo phiếu nhập kho (`phieu_nhap_kho`, `chi_tiet_phieu_nhap`) để cộng `ton_kho`.
   - Theo dõi sách sắp hết hàng (`ton_kho <= 5`).
   - Thêm/Sửa thông tin đầu sách, danh mục, tác giả, nhà xuất bản (`sach`, `danh_muc`, `tac_gia`, `nha_xuat_ban`).
-  - Cập nhật trạng thái đóng gói/xuất kho cho đơn hàng (`PENDING` → `PREPARING` → `SHIPPING`).
+  - Cập nhật trạng thái đóng gói/xuất kho cho đơn hàng: `CHO_XAC_NHAN` (`PENDING`) → `DANG_DONG_GOI` (`PREPARING`) → `DANG_GIAO` (`SHIPPING`).
 - **Không được dùng:**
   - Không xem báo cáo doanh thu, lợi nhuận.
   - Không tự ý chỉnh giá bán, Flash Sale, hay tạo/sửa `ma_giam_gia`.
-  - Không duyệt yêu cầu đổi trả/hoàn tiền (`yeu_cau_doi_tra`).
+  - Không xác nhận giao thành công (`DA_GIAO`), không hủy đơn (`DA_HUY`) và không duyệt yêu cầu đổi trả/hoàn tiền (`yeu_cau_doi_tra`).
   - Không quản lý tài khoản khách hàng hay nhân sự (`tk_nguoi_dung`).
 
 #### 3) Chăm sóc Khách hàng (`CSKH`)
 - **Được dùng:**
   - Tra cứu thông tin sách và mã giảm giá đang hoạt động để tư vấn khách.
   - Xem danh sách khách hàng (`CUSTOMER`) và lịch sử đơn hàng để hỗ trợ.
-  - Xác nhận/Hủy đơn hàng theo yêu cầu khách và cập nhật tiến độ xử lý.
+  - Xác nhận đơn (`CHO_XAC_NHAN` → `DANG_DONG_GOI`), hủy đơn ở `CHO_XAC_NHAN` / `DANG_DONG_GOI` theo yêu cầu khách và xác nhận hoàn tất giao hàng (`DANG_GIAO` → `DA_GIAO`).
   - Duyệt hoặc từ chối yêu cầu đổi trả (`yeu_cau_doi_tra`).
   - Kiểm duyệt/ẩn đánh giá vi phạm (`danh_gia`) và gửi thông báo cho khách (`thong_bao`).
 - **Không được dùng:**
   - Không tạo phiếu nhập kho hoặc sửa số lượng tồn kho (`phieu_nhap_kho`).
+  - Không tự chuyển đơn ở khâu xuất kho (`DANG_DONG_GOI` → `DANG_GIAO`).
   - Không thêm/sửa/xóa sách, danh mục, giá bán, hay tạo/sửa mã giảm giá.
   - Không xem báo cáo doanh thu/tài chính tổng hợp.
   - Không tạo/xóa/khóa tài khoản nhân viên hay thay đổi cấu hình hệ thống.

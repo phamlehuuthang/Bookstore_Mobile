@@ -263,16 +263,18 @@ erDiagram
 - **Quy tắc 4.1 — Vòng đời trạng thái đơn hàng (Order Lifecycle):**
   ```mermaid
   stateDiagram-v2
-      [*] --> PENDING : Khách đặt hàng
-      PENDING --> PREPARING : Admin duyệt đơn & đóng gói
-      PENDING --> CANCELLED : Khách hủy đơn (Chỉ cho phép ở bước này)
-      PREPARING --> SHIPPING : Bàn giao bưu tá vận chuyển
-      SHIPPING --> DELIVERED : Giao thành công (Payment -> PAID)
+      [*] --> PENDING : Khách đặt hàng (CHO_XAC_NHAN)
+      PENDING --> PREPARING : Admin / Kho / CSKH xác nhận & đóng gói (DANG_DONG_GOI)
+      PENDING --> CANCELLED : Khách tự hủy hoặc Admin / CSKH hủy (DA_HUY)
+      PREPARING --> SHIPPING : Admin / Kho xuất kho giao (DANG_GIAO)
+      PREPARING --> CANCELLED : Admin / CSKH hủy khi chưa bàn giao vận chuyển (DA_HUY)
+      SHIPPING --> DELIVERED : Khách bấm "Đã nhận được hàng" / Auto-Complete / Admin xác nhận (DA_GIAO, Payment -> DA_THANH_TOAN)
   ```
-- **Quy tắc 4.2 — Quy tắc Hủy đơn:**
-  - Khách hàng chỉ được phép bấm **Hủy đơn** khi `status = 'PENDING'`. Khi Admin đã chuyển sang `'PREPARING'` hoặc `'SHIPPING'`, không được phép hủy.
+- **Quy tắc 4.2 — Quy tắc Hủy đơn & Hoàn dữ liệu đầy đủ:**
+  - **Phạm vi được hủy:** Khách hàng chỉ được phép tự bấm **Hủy đơn** khi đơn đang ở `CHO_XAC_NHAN` (`PENDING`). Trên Web Admin, `ADMIN` và `CSKH` được phép hủy khi đơn đang ở `CHO_XAC_NHAN` hoặc `DANG_DONG_GOI` (`PREPARING`); `WAREHOUSE_MANAGER` không có quyền hủy. Từ `DANG_GIAO` (`SHIPPING`) trở đi không ai được phép hủy đơn.
+  - **Hoàn dữ liệu khi hủy (`DA_HUY`):** Khi đơn hàng bị hủy (bởi Khách, `ADMIN` hoặc `CSKH`), hệ thống chạy trong 1 `@Transactional` để hoàn đủ: cộng lại `sach.ton_kho`, giảm `sach.da_ban`, hoàn `1` lượt `ma_giam_gia.da_su_dung` (nếu đơn có áp dụng voucher), trừ lại `tong_chi_tieu` & `so_don_hang` trên `tk_nguoi_dung` (không âm), và chuyển `trang_thai_thanh_toan` từ `DA_THANH_TOAN` → `DA_HOAN_TIEN` nếu khách đã thanh toán trước.
 - **Quy tắc 4.3 — Trừ tồn kho khi đặt hàng:**
-  - Khi đơn hàng được tạo, tự động giảm `books.stock` đi `quantity` và tăng `books.sold_count` thêm `quantity`.
+  - Khi đơn hàng được tạo, tự động giảm `books.stock` (`sach.ton_kho`) đi `quantity` và tăng `books.sold_count` (`sach.da_ban`) thêm `quantity`.
 
 ---
 

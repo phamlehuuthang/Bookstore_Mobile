@@ -43,6 +43,7 @@ export default function CheckoutScreen() {
     applyVoucherCode,
     clearVoucher,
     clearSelectedAfterCheckout,
+    refreshCart,
   } = useCart();
 
   const addresses = user?.addresses || [];
@@ -52,6 +53,7 @@ export default function CheckoutScreen() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
   const [orderNote, setOrderNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
 
   // State cho Cửa sổ chọn Voucher (Modal)
@@ -101,29 +103,23 @@ export default function CheckoutScreen() {
   const handlePlaceOrder = async () => {
     if (!chosenAddress || selectedItems.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
+    setCheckoutError(null);
     try {
       const newOrder = await orderService.createOrder({
-        userId: user?.id || 'user-cust-1',
-        customerName: chosenAddress.fullName,
-        customerPhone: chosenAddress.phone,
-        shippingAddress: chosenAddress,
-        items: selectedItems.map((entry) => ({
-          bookId: entry.book.id,
-          title: entry.book.title,
-          coverUrl: entry.book.coverUrl,
-          authorName: entry.book.authorName,
-          unitPrice: entry.book.flashSalePrice ?? entry.book.price,
-          quantity: entry.quantity,
-        })),
-        subtotal,
-        shippingFee,
-        discountAmount,
+        addressId: chosenAddress.id,
         voucherCode: discountAmount > 0 ? appliedVoucher?.code : undefined,
         paymentMethod,
         note: orderNote.trim() || undefined,
       });
       clearSelectedAfterCheckout();
+      await refreshCart();
       setCreatedOrder(newOrder);
+    } catch (err) {
+      setCheckoutError(
+        err instanceof Error
+          ? err.message
+          : 'Không thể đặt hàng lúc này. Vui lòng kiểm tra lại giỏ hàng.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -131,6 +127,15 @@ export default function CheckoutScreen() {
 
   // MÀN HÌNH ĐẶT HÀNG THÀNH CÔNG
   if (createdOrder) {
+    const formattedCreatedAddress = [
+      createdOrder.shippingAddress.streetAddress,
+      createdOrder.shippingAddress.ward,
+      createdOrder.shippingAddress.district,
+      createdOrder.shippingAddress.province,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.successContainer}>
@@ -142,9 +147,8 @@ export default function CheckoutScreen() {
             Mã đơn hàng: {createdOrder.orderCode}
           </Text>
           <Text style={styles.successDesc}>
-            Cảm ơn {createdOrder.customerName}! Kiện sách của bạn đang được kho đóng gói
-            chống sốc 3 lớp và sẽ sớm giao tới {createdOrder.shippingAddress.district},{' '}
-            {createdOrder.shippingAddress.province}.
+            Cảm ơn {createdOrder.customerName}! Kiện sách của bạn đã được ghi nhận
+            và sẽ sớm giao tới {formattedCreatedAddress}.
           </Text>
 
           <View style={styles.successSummaryBox}>
@@ -200,6 +204,26 @@ export default function CheckoutScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
         >
+          {checkoutError ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                padding: 12,
+                borderRadius: 10,
+                backgroundColor: '#FEF2F2',
+                borderWidth: 1,
+                borderColor: '#FECACA',
+              }}
+            >
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
+              <Text style={{ flex: 1, fontSize: 12.5, color: colors.danger, fontWeight: '600' }}>
+                {checkoutError}
+              </Text>
+            </View>
+          ) : null}
+
           {/* 1. ĐỊA CHỈ NHẬN HÀNG */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -389,8 +413,8 @@ export default function CheckoutScreen() {
                           isSelected
                             ? { backgroundColor: colors.primary }
                             : isEligible
-                            ? { backgroundColor: colors.accent }
-                            : { backgroundColor: colors.border },
+                              ? { backgroundColor: colors.accent }
+                              : { backgroundColor: colors.border },
                         ]}
                       >
                         <Text
@@ -672,8 +696,8 @@ export default function CheckoutScreen() {
                             isSelected
                               ? colors.primary
                               : isEligible
-                              ? colors.textSecondary
-                              : colors.border
+                                ? colors.textSecondary
+                                : colors.border
                           }
                         />
                       </View>
