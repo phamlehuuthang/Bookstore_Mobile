@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   AlertTriangle,
   BarChart3,
@@ -88,6 +88,17 @@ const NAV_ITEMS: NavItemConfig[] = [
     allowedRoles: ['ADMIN'],
   },
 ];
+
+export interface AdminOutletContext {
+  currentStaff: StaffAccount;
+}
+
+/**
+ * Hook giúp các trang con (Books, Categories, CustomersStaff...) đọc thông tin nhân sự và vai trò RBAC hiện tại.
+ */
+export function useAdminStaff(): StaffAccount {
+  return useOutletContext<AdminOutletContext>().currentStaff;
+}
 
 export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -589,7 +600,7 @@ export const AdminLayout: React.FC = () => {
         {/* SCROLLABLE PAGE CONTENT */}
         <main className="flex-1 p-6 overflow-y-auto max-w-[1600px] w-full mx-auto">
           {isAuthorizedRoute ? (
-            <Outlet />
+            <Outlet context={{ currentStaff } satisfies AdminOutletContext} />
           ) : (
             <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center max-w-lg mx-auto mt-12 space-y-3">
               <ShieldAlert className="w-12 h-12 text-rose-600 mx-auto" />

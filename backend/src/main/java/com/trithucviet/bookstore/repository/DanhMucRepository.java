@@ -4,6 +4,7 @@ import com.trithucviet.bookstore.entity.DanhMuc;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface DanhMucRepository extends JpaRepository<DanhMuc, String> {
 
@@ -18,4 +19,23 @@ public interface DanhMucRepository extends JpaRepository<DanhMuc, String> {
             order by d.thuTuHienThi asc, d.id asc
             """)
     List<DanhMuc> findActiveCategoriesOrdered();
+
+    /**
+     * Lấy toàn bộ danh mục (bao gồm cả danh mục tạm ẩn) cho Web Admin quản lý.
+     */
+    @Query("""
+            select d from DanhMuc d
+            left join fetch d.danhMucCha
+            order by d.thuTuHienThi asc, d.id asc
+            """)
+    List<DanhMuc> findAllOrdered();
+
+    @Query("select count(d) > 0 from DanhMuc d where upper(d.duongDan) = upper(:duongDan)")
+    boolean existsByDuongDanIgnoreCase(@Param("duongDan") String duongDan);
+
+    @Query("select count(d) > 0 from DanhMuc d where upper(d.duongDan) = upper(:duongDan) and d.id <> :id")
+    boolean existsByDuongDanIgnoreCaseAndIdNot(@Param("duongDan") String duongDan, @Param("id") String id);
+
+    @Query("select count(d) > 0 from DanhMuc d where d.danhMucCha.id = :parentId")
+    boolean existsByDanhMucChaId(@Param("parentId") String parentId);
 }

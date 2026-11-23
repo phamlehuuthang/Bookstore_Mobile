@@ -1,5 +1,6 @@
 import { db } from '@shared/index';
 import {
+  DiscountType,
   InventoryReceipt,
   InventoryReceiptItem,
   NotificationItem,
@@ -9,6 +10,85 @@ import {
   UserRole,
   Voucher,
 } from '@shared/types';
+import { adminRequest } from './adminHttpClient';
+
+// Mở rộng Voucher dùng cho Web Admin để hiển thị phạm vi Danh mục áp dụng từ Backend
+export interface AdminVoucher extends Voucher {
+  categoryId?: string | null;
+  categoryName?: string | null;
+  remainingUses?: number;
+}
+
+// Khuôn dữ liệu VoucherDto trả về từ Backend Java (/api/admin/vouchers/**)
+interface BackendVoucherDto {
+  id: string;
+  maCode: string;
+  tieuDe: string;
+  moTa: string | null;
+  loaiGiam: 'CO_DINH' | 'PHAN_TRAM';
+  giaTriGiam: number;
+  giamToiDa: number | null;
+  donToiThieu: number | null;
+  gioiHanLuot: number;
+  daSuDung: number;
+  conLaiLuot: number;
+  ngayBatDau: string;
+  ngayKetThuc: string;
+  dangHoatDong: boolean;
+  danhMucId: string | null;
+  tenDanhMucApDung: string | null;
+}
+
+function mapBackendVoucher(dto: BackendVoucherDto): AdminVoucher {
+  const discountType: DiscountType =
+    dto.loaiGiam === 'PHAN_TRAM' ? 'PERCENTAGE' : 'FIXED';
+  return {
+    id: dto.id,
+    code: dto.maCode,
+    title: dto.tieuDe,
+    description: dto.moTa || '',
+    discountType,
+    discountValue: Number(dto.giaTriGiam ?? 0),
+    maxDiscountAmount: dto.giamToiDa != null ? Number(dto.giamToiDa) : undefined,
+    minOrderValue: Number(dto.donToiThieu ?? 0),
+    usageLimit: Number(dto.gioiHanLuot ?? 0),
+    usedCount: Number(dto.daSuDung ?? 0),
+    remainingUses: Number(dto.conLaiLuot ?? 0),
+    startDate: dto.ngayBatDau,
+    endDate: dto.ngayKetThuc,
+    isActive: Boolean(dto.dangHoatDong),
+    categoryId: dto.danhMucId,
+    categoryName: dto.tenDanhMucApDung,
+  };
+}
+
+// Khuôn dữ liệu UserDto từ Backend Java (/api/admin/users/**)
+interface BackendUserDto {
+  id: string;
+  hoTen: string;
+  email: string;
+  soDienThoai: string | null;
+  vaiTro: UserRole;
+  biKhoa: boolean;
+  tongChiTieu: number | null;
+  soDonHang: number | null;
+  ngayTao: string;
+}
+
+function mapBackendUser(dto: BackendUserDto): User {
+  return {
+    id: dto.id,
+    fullName: dto.hoTen,
+    email: dto.email,
+    phone: dto.soDienThoai || '',
+    role: dto.vaiTro,
+    isLocked: Boolean(dto.biKhoa),
+    totalSpent: Number(dto.tongChiTieu ?? 0),
+    orderCount: Number(dto.soDonHang ?? 0),
+    createdAt: dto.ngayTao,
+    addresses: [],
+  };
+}
 
 export const adminSystemService = {
   // 1. INVENTORY & IMPORT RECEIPTS
@@ -52,25 +132,53 @@ export const adminSystemService = {
     return receipt;
   },
 
-  // 2. CUSTOMERS & STAFF RBAC
-  async getUsers(): Promise<User[]> {
-    return [...db.users];
+  // 2. CUSTOMERS & STAFF RBAC (Bước 2 - Phần 3: kết nối Backend thật)
+  async getCustomers(keyword?: string): Promise<User[]> {
+    const query = keyword?.trim()
+      ? `?keyword=${encodeURIComponent(keyword.trim())}`
+      : '';
+    const rows = await adminRequest<BackendUserDto[]>(
+      `/api/admin/users/customers${query}`
+    );
+    return rows.map(mapBackendUser);
   },
 
-  async toggleUserLock(userId: string): Promise<User | undefined> {
-    const user = db.users.find((u) => u.id === userId);
-    if (user) {
-      user.isLocked = !user.isLocked;
-    }
-    return user;
+  async getStaff(keyword?: string): Promise<User[]> {
+    const query = keyword?.trim()
+      ? `?keyword=${encodeURIComponent(keyword.trim())}`
+      : '';
+    const rows = await adminRequest<BackendUserDto[]>(
+      `/api/admin/users/staff${query}`
+    );
+    return rows.map(mapBackendUser);
   },
 
-  async updateStaffRole(userId: string, role: UserRole): Promise<User | undefined> {
-    const user = db.users.find((u) => u.id === userId);
-    if (user) {
-      user.role = role;
+  async getUsers(includeStaff = true): Promise<User[]> {
+    const customers = await this.getCustomers();
+    if (!includeStaff) {
+      return customers;
     }
-    return user;
+    const staff = await this.getStaff();
+    return [...customers, ...staff];
+  },
+
+  async toggleUserLock(userId: string): Promise<User> {
+    const updated = await adminRequest<BackendUserDto>(
+      `/api/admin/users/${encodeURIComponent(userId)}/lock`,
+      { method: 'PATCH' }
+    );
+    return mapBackendUser(updated);
+  },
+
+  async updateStaffRole(userId: string, role: UserRole): Promise<User> {
+    const updated = await adminRequest<BackendUserDto>(
+      `/api/admin/users/${encodeURIComponent(userId)}/role`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ vaiTro: role }),
+      }
+    );
+    return mapBackendUser(updated);
   },
 
   async createStaffAccount(payload: {
@@ -78,58 +186,81 @@ export const adminSystemService = {
     email: string;
     phone: string;
     role: UserRole;
+    password?: string;
   }): Promise<User> {
-    const newStaff: User = {
-      id: `user-staff-${Date.now()}`,
-      fullName: payload.fullName,
-      email: payload.email,
-      phone: payload.phone,
-      role: payload.role,
-      isLocked: false,
-      totalSpent: 0,
-      orderCount: 0,
-      createdAt: new Date().toISOString(),
-      addresses: [],
-    };
-    db.users.push(newStaff);
-    return newStaff;
+    const created = await adminRequest<BackendUserDto>('/api/admin/users/staff', {
+      method: 'POST',
+      body: JSON.stringify({
+        hoTen: payload.fullName.trim(),
+        email: payload.email.trim(),
+        soDienThoai: payload.phone.trim(),
+        vaiTro: payload.role,
+        matKhau: payload.password?.trim() || undefined,
+      }),
+    });
+    return mapBackendUser(created);
   },
 
-  // 3. VOUCHERS, REVIEWS & PUSH NOTIFICATIONS
-  async getVouchers(): Promise<Voucher[]> {
-    return [...db.vouchers];
-  },
-
-  async saveVoucher(payload: Partial<Voucher> & { code: string; title: string }): Promise<Voucher> {
-    if (payload.id) {
-      const idx = db.vouchers.findIndex((v) => v.id === payload.id);
-      if (idx !== -1) {
-        db.vouchers[idx] = { ...db.vouchers[idx], ...payload };
-        return db.vouchers[idx];
-      }
+  // 3. VOUCHERS (Bước 4 - Phần 3: kết nối Backend thật), REVIEWS & PUSH NOTIFICATIONS
+  async getVouchers(params?: {
+    active?: boolean;
+    keyword?: string;
+  }): Promise<AdminVoucher[]> {
+    const queryParams = new URLSearchParams();
+    if (typeof params?.active === 'boolean') {
+      queryParams.set('dangHoatDong', String(params.active));
     }
-    const newVoucher: Voucher = {
-      id: `vch-${Date.now()}`,
-      code: payload.code.toUpperCase(),
-      title: payload.title,
-      description: payload.description || 'Chương trình khuyến mãi đặc biệt',
-      discountType: payload.discountType || 'FIXED',
-      discountValue: Number(payload.discountValue || 30000),
-      maxDiscountAmount: payload.maxDiscountAmount,
-      minOrderValue: Number(payload.minOrderValue || 150000),
-      usageLimit: Number(payload.usageLimit || 200),
-      usedCount: 0,
-      startDate: payload.startDate || '2026-11-01',
-      endDate: payload.endDate || '2026-12-31',
-      isActive: payload.isActive ?? true,
-    };
-    db.vouchers.unshift(newVoucher);
-    return newVoucher;
+    if (params?.keyword?.trim()) {
+      queryParams.set('keyword', params.keyword.trim());
+    }
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    const rows = await adminRequest<BackendVoucherDto[]>(
+      `/api/admin/vouchers${query}`
+    );
+    return rows.map(mapBackendVoucher);
   },
 
-  async toggleVoucherActive(voucherId: string): Promise<void> {
-    const v = db.vouchers.find((item) => item.id === voucherId);
-    if (v) v.isActive = !v.isActive;
+  async saveVoucher(
+    payload: Partial<AdminVoucher> & { code: string; title: string }
+  ): Promise<AdminVoucher> {
+    const body = {
+      maCode: payload.code.trim().toUpperCase(),
+      tieuDe: payload.title.trim(),
+      moTa: payload.description?.trim() || undefined,
+      loaiGiam:
+        payload.discountType === 'PERCENTAGE' ? 'PHAN_TRAM' : 'CO_DINH',
+      giaTriGiam: Number(payload.discountValue),
+      giamToiDa:
+        payload.discountType === 'PERCENTAGE' && payload.maxDiscountAmount != null
+          ? Number(payload.maxDiscountAmount)
+          : null,
+      donToiThieu:
+        payload.minOrderValue != null ? Number(payload.minOrderValue) : 0,
+      danhMucId: payload.categoryId?.trim() || null,
+      gioiHanLuot: Number(payload.usageLimit),
+      ngayBatDau: payload.startDate || undefined,
+      ngayKetThuc: payload.endDate,
+      dangHoatDong: payload.isActive,
+    };
+
+    const saved = payload.id
+      ? await adminRequest<BackendVoucherDto>(
+          `/api/admin/vouchers/${encodeURIComponent(payload.id)}`,
+          { method: 'PUT', body: JSON.stringify(body) }
+        )
+      : await adminRequest<BackendVoucherDto>('/api/admin/vouchers', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+    return mapBackendVoucher(saved);
+  },
+
+  async toggleVoucherActive(voucherId: string): Promise<AdminVoucher> {
+    const updated = await adminRequest<BackendVoucherDto>(
+      `/api/admin/vouchers/${encodeURIComponent(voucherId)}/toggle`,
+      { method: 'PATCH' }
+    );
+    return mapBackendVoucher(updated);
   },
 
   async getReviews(): Promise<Review[]> {

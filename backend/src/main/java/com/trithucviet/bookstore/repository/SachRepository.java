@@ -37,4 +37,51 @@ public interface SachRepository extends JpaRepository<Sach, String> {
             where s.id = :id and s.hienThi = true
             """)
     Optional<Sach> findVisibleByIdWithDetails(@Param("id") String id);
+
+    /**
+     * Tải toàn bộ sách cho Web Admin (bao gồm cả sách đang ẩn hienThi = false).
+     */
+    @Query("""
+            select s from Sach s
+            join fetch s.danhMuc dm
+            left join fetch dm.danhMucCha
+            join fetch s.tacGia
+            join fetch s.nhaXuatBan
+            order by s.ngayTao desc, s.id asc
+            """)
+    List<Sach> findAllWithDetails();
+
+    /**
+     * Tìm chi tiết 1 cuốn sách theo ID cho Web Admin (không lọc theo hienThi).
+     */
+    @Query("""
+            select s from Sach s
+            join fetch s.danhMuc dm
+            left join fetch dm.danhMucCha
+            join fetch s.tacGia
+            join fetch s.nhaXuatBan
+            where s.id = :id
+            """)
+    Optional<Sach> findByIdWithDetails(@Param("id") String id);
+
+    @Query("select count(s) > 0 from Sach s where upper(s.maIsbn) = upper(:maIsbn)")
+    boolean existsByMaIsbnIgnoreCase(@Param("maIsbn") String maIsbn);
+
+    @Query("select count(s) > 0 from Sach s where upper(s.maIsbn) = upper(:maIsbn) and s.id <> :id")
+    boolean existsByMaIsbnIgnoreCaseAndIdNot(@Param("maIsbn") String maIsbn, @Param("id") String id);
+
+    @Query("select count(s) > 0 from Sach s where upper(s.duongDan) = upper(:duongDan)")
+    boolean existsByDuongDanIgnoreCase(@Param("duongDan") String duongDan);
+
+    @Query("select count(s) > 0 from Sach s where upper(s.duongDan) = upper(:duongDan) and s.id <> :id")
+    boolean existsByDuongDanIgnoreCaseAndIdNot(@Param("duongDan") String duongDan, @Param("id") String id);
+
+    @Query("select count(s) > 0 from Sach s where s.danhMuc.id = :danhMucId")
+    boolean existsByDanhMucId(@Param("danhMucId") String danhMucId);
+
+    @Query("select count(s) > 0 from Sach s where s.tacGia.id = :tacGiaId")
+    boolean existsByTacGiaId(@Param("tacGiaId") String tacGiaId);
+
+    @Query("select count(s) > 0 from Sach s where s.nhaXuatBan.id = :nhaXuatBanId")
+    boolean existsByNhaXuatBanId(@Param("nhaXuatBanId") String nhaXuatBanId);
 }
