@@ -1,9 +1,10 @@
-import { db } from '@shared/index';
 import {
   Order,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
+  ReturnRequest,
+  ReturnStatus,
 } from '@shared/types';
 import { apiRequest } from './httpClient';
 
@@ -25,6 +26,21 @@ interface BackendOrderTimelineDto {
   tieuDe: string;
   moTa: string | null;
   thoiGian: string;
+}
+
+export interface BackendReturnRequestDto {
+  id: string;
+  donHangId: string;
+  maDonHang: string;
+  tenKhachHang: string;
+  sdtKhachHang: string;
+  lyDo: string;
+  moTa: string;
+  anhMinhChungUrls: string[];
+  trangThai: 'CHO_DUYET' | 'DA_CHAP_THUAN' | 'TU_CHOI';
+  ghiChuAdmin: string | null;
+  ngayTao: string;
+  ngayXuLy: string | null;
 }
 
 export interface BackendOrderDto {
@@ -52,6 +68,7 @@ export interface BackendOrderDto {
   ngayTao: string;
   items: BackendOrderItemDto[];
   timeline: BackendOrderTimelineDto[];
+  returnRequest?: BackendReturnRequestDto | null;
 }
 
 export function mapBackendOrderStatus(
@@ -110,6 +127,35 @@ function mapBackendPaymentStatus(
   }
 }
 
+function mapBackendReturnStatus(
+  status: BackendReturnRequestDto['trangThai']
+): ReturnStatus {
+  switch (status) {
+    case 'CHO_DUYET':
+      return 'PENDING';
+    case 'DA_CHAP_THUAN':
+      return 'APPROVED';
+    case 'TU_CHOI':
+      return 'REJECTED';
+  }
+}
+
+function mapReturnRequest(dto: BackendReturnRequestDto): ReturnRequest {
+  return {
+    id: dto.id,
+    orderId: dto.donHangId,
+    orderCode: dto.maDonHang,
+    customerName: dto.tenKhachHang,
+    reason: dto.lyDo,
+    description: dto.moTa,
+    evidenceImages: dto.anhMinhChungUrls || [],
+    status: mapBackendReturnStatus(dto.trangThai),
+    adminNote: dto.ghiChuAdmin ?? undefined,
+    createdAt: dto.ngayTao,
+    resolvedAt: dto.ngayXuLy ?? undefined,
+  };
+}
+
 function mapOrder(dto: BackendOrderDto): Order {
   return {
     id: dto.id,
@@ -152,6 +198,7 @@ function mapOrder(dto: BackendOrderDto): Order {
       description: step.moTa || '',
       timestamp: step.thoiGian,
     })),
+    returnRequest: dto.returnRequest ? mapReturnRequest(dto.returnRequest) : undefined,
     isReviewed: Boolean(dto.daDanhGia),
     createdAt: dto.ngayTao,
     updatedAt: dto.ngayTao,
@@ -233,33 +280,22 @@ export const orderService = {
               return mapOrder(dto);
             },
 
-            // Phần Yêu cầu Đổi trả hàng sẽ nối tiếp sang API Bước 7 ngay sau Bước 6
+            // Bước 7 - Phần 2: Gửi yêu cầu đổi trả thật qua POST /api/v1/returns
             async submitReturnRequest(payload: {
               orderId: string;
               reason: string;
               description: string;
               evidenceImages: string[];
-            }): Promise < Order > {
-              const order = db.orders.find((o) => o.id === payload.orderId);
-              if(!order) {
-                throw new Error('Tính năng gửi yêu cầu đổi trả sẽ được nối API ở Bước 7.');
-              }
-    order.returnRequest = {
-                id: `ret-${Date.now()}`,
-                orderId: order.id,
-                orderCode: order.orderCode,
-                customerName: order.customerName,
-                reason: payload.reason,
-                description: payload.description,
-                evidenceImages:
-                  payload.evidenceImages.length > 0
-                    ? payload.evidenceImages
-          : [
-  'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
-],
-  status: 'PENDING',
-    createdAt: new Date().toISOString(),
-    };
-return { ...order };
-  },
+            }): Promise<ReturnRequest> {
+              const dto = await apiRequest<BackendReturnRequestDto>('/api/v1/returns', {
+                method: 'POST',
+                body: {
+                  donHangId: payload.orderId,
+                  lyDo: payload.reason.trim(),
+                  moTa: payload.description.trim(),
+                  anhMinhChungUrls: payload.evidenceImages.filter((u) => u && u.trim()),
+                },
+              });
+              return mapReturnRequest(dto);
+            },
 };

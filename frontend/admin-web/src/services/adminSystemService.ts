@@ -3,7 +3,6 @@ import {
   DiscountType,
   InventoryReceipt,
   InventoryReceiptItem,
-  NotificationItem,
   Review,
   StoreConfig,
   User,
@@ -263,26 +262,63 @@ export const adminSystemService = {
     return mapBackendVoucher(updated);
   },
 
-  async getReviews(): Promise<Review[]> {
-    return [...db.reviews];
+  // 3. KIỂM DUYỆT ĐÁNH GIÁ & PHÁT SÓNG THÔNG BÁO (Bước 7 - Phần 1 & 3)
+  async getReviews(keyword?: string): Promise<Review[]> {
+    const query = keyword?.trim()
+      ? `?keyword=${encodeURIComponent(keyword.trim())}`
+      : '';
+    const rows = await adminRequest<
+      Array<{
+        id: string;
+        sachId: string;
+        tieuDeSach: string;
+        nguoiDungId: string;
+        tenNguoiDung: string;
+        donHangId: string | null;
+        soSao: number;
+        binhLuan: string;
+        anhDanhGiaUrls: string[];
+        biAn: boolean;
+        ngayTao: string;
+      }>
+    >(`/api/admin/reviews${query}`);
+    return rows.map((r) => ({
+      id: r.id,
+      bookId: r.sachId,
+      bookTitle: r.tieuDeSach,
+      userId: r.nguoiDungId,
+      userName: r.tenNguoiDung,
+      orderId: r.donHangId || '',
+      rating: Number(r.soSao ?? 5),
+      comment: r.binhLuan,
+      imageUrls: r.anhDanhGiaUrls || [],
+      isHidden: Boolean(r.biAn),
+      createdAt: r.ngayTao,
+    }));
   },
 
   async toggleReviewHidden(reviewId: string): Promise<void> {
-    const rev = db.reviews.find((r) => r.id === reviewId);
-    if (rev) rev.isHidden = !rev.isHidden;
+    await adminRequest(`/api/admin/reviews/${encodeURIComponent(reviewId)}/toggle-hidden`, {
+      method: 'PATCH',
+    });
   },
 
-  async sendPushNotification(title: string, message: string): Promise<NotificationItem> {
-    const notif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title,
-      message,
-      type: 'PROMO',
-      isRead: false,
-      createdAt: 'Vừa phát sóng',
-    };
-    db.notifications.unshift(notif);
-    return notif;
+  async sendPushNotification(
+    title: string,
+    message: string
+  ): Promise<{ recipients: number }> {
+    const res = await adminRequest<{ soKhachHangNhan: number }>(
+      '/api/admin/notifications/broadcast',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tieuDe: title.trim(),
+          noiDung: message.trim(),
+          loaiThongBao: 'KHUYEN_MAI',
+        }),
+      }
+    );
+    return { recipients: Number(res?.soKhachHangNhan ?? 0) };
   },
 
   // 4. STORE CONFIGURATION

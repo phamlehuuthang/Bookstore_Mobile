@@ -219,40 +219,58 @@ const handleConfirmReceived = async (order: Order) => {
 const handleSubmitReview = async () => {
   if (!reviewOrder || !user) return;
   const firstItem = reviewOrder.items[0];
-  await bookService.submitReview({
-    bookId: firstItem.bookId,
-    bookTitle: firstItem.title,
-    userId: user.id,
-    userName: user.fullName,
-    orderId: reviewOrder.id,
-    rating,
-    comment:
-      reviewComment.trim() ||
-      'Sách đóng gói rất cẩn thận, nội dung hay và giao hàng đúng hẹn!',
-    imageUrls: includePhoto ? [firstItem.coverUrl] : [],
-  });
-  setReviewOrder(null);
-  setReviewComment('');
-  setBannerMessage(`Cảm ơn bạn đã đánh giá ${rating} sao cho đơn hàng ${reviewOrder.orderCode}!`);
-  await loadOrders();
+  setErrorBanner(null);
+  setBannerMessage(null);
+  try {
+    await bookService.submitReview({
+      bookId: firstItem.bookId,
+      bookTitle: firstItem.title,
+      userId: user.id,
+      userName: user.fullName,
+      orderId: reviewOrder.id,
+      rating,
+      comment:
+        reviewComment.trim() ||
+        'Sách đóng gói rất cẩn thận, nội dung hay và giao hàng đúng hẹn!',
+      imageUrls: includePhoto ? [firstItem.coverUrl] : [],
+    });
+    const reviewedCode = reviewOrder.orderCode;
+    setReviewOrder(null);
+    setReviewComment('');
+    setBannerMessage(`Cảm ơn bạn đã đánh giá ${rating} sao cho đơn hàng ${reviewedCode}!`);
+    await loadOrders();
+  } catch (err) {
+    setErrorBanner(
+      err instanceof Error ? err.message : 'Không thể gửi đánh giá lúc này.'
+    );
+  }
 };
 
 const handleSubmitReturn = async () => {
   if (!returnOrder) return;
-  await orderService.submitReturnRequest({
-    orderId: returnOrder.id,
-    reason: returnReason,
-    description:
-      returnDesc.trim() ||
-      'Mong cửa hàng kiểm tra hình ảnh minh chứng và hỗ trợ đổi cuốn mới giúp mình.',
-    evidenceImages: [returnOrder.items[0]?.coverUrl || ''],
-  });
-  setReturnOrder(null);
-  setReturnDesc('');
-  setBannerMessage(
-    `Đã gửi yêu cầu đổi trả cho đơn ${returnOrder.orderCode}. Bộ phận CSKH sẽ phản hồi trong 24h.`
-  );
-  await loadOrders();
+  setErrorBanner(null);
+  setBannerMessage(null);
+  try {
+    await orderService.submitReturnRequest({
+      orderId: returnOrder.id,
+      reason: returnReason,
+      description:
+        returnDesc.trim() ||
+        'Mong cửa hàng kiểm tra hình ảnh minh chứng và hỗ trợ đổi cuốn mới giúp mình.',
+      evidenceImages: [returnOrder.items[0]?.coverUrl || ''],
+    });
+    const returnedCode = returnOrder.orderCode;
+    setReturnOrder(null);
+    setReturnDesc('');
+    setBannerMessage(
+      `Đã gửi yêu cầu đổi trả cho đơn ${returnedCode}. Bộ phận CSKH sẽ phản hồi trong 24h.`
+    );
+    await loadOrders();
+  } catch (err) {
+    setErrorBanner(
+      err instanceof Error ? err.message : 'Không thể gửi yêu cầu đổi trả.'
+    );
+  }
 };
 
   return (

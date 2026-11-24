@@ -45,6 +45,8 @@ export default function ProfileScreen() {
     setDefaultAddress,
     deleteAddress,
     toggleWishlist,
+    refreshNotifications,
+    markNotificationRead,
     markAllNotificationsRead,
   } = useAuth();
   const { activeVouchers } = useCart();
@@ -1006,23 +1008,46 @@ export default function ProfileScreen() {
           <View style={styles.sectionBlock}>
             <View style={styles.sectionTitleRow}>
               <Text style={styles.sectionTitle}>Thông báo đơn hàng & Khuyến mãi</Text>
-              <Pressable onPress={markAllNotificationsRead}>
-                <Text style={styles.actionLink}>Đánh dấu đã đọc</Text>
-              </Pressable>
-            </View>
-            {notifications.map((n) => (
-              <View
-                key={n.id}
-                style={[
-                  styles.itemCard,
-                  !n.isRead && { backgroundColor: colors.primarySoft },
-                ]}
-              >
-                <Text style={styles.itemCardTitle}>{n.title}</Text>
-                <Text style={styles.itemCardSub}>{n.message}</Text>
-                <Text style={styles.voucherExpiry}>{n.createdAt}</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Pressable onPress={() => void refreshNotifications()}>
+                  <Text style={styles.actionLink}>Làm mới</Text>
+                </Pressable>
+                <Pressable onPress={() => void markAllNotificationsRead()}>
+                  <Text style={styles.actionLink}>Đánh dấu đã đọc</Text>
+                </Pressable>
               </View>
-            ))}
+            </View>
+            {notifications.length === 0 ? (
+              <View style={styles.itemCard}>
+                <Text style={styles.itemCardSub}>Bạn chưa có thông báo nào.</Text>
+              </View>
+            ) : (
+              notifications.map((n) => (
+                <Pressable
+                  key={n.id}
+                  onPress={() => {
+                    if (!n.isRead) {
+                      void markNotificationRead(n.id);
+                    }
+                  }}
+                  style={[
+                    styles.itemCard,
+                    !n.isRead && { backgroundColor: colors.primarySoft },
+                  ]}
+                >
+                  <View style={styles.itemCardHeader}>
+                    <Text style={[styles.itemCardTitle, { flex: 1 }]}>{n.title}</Text>
+                    {!n.isRead ? (
+                      <View style={styles.defaultTag}>
+                        <Text style={styles.defaultTagText}>Mới</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.itemCardSub}>{n.message}</Text>
+                  <Text style={styles.voucherExpiry}>{n.createdAt}</Text>
+                </Pressable>
+              ))
+            )}
           </View>
         ) : null}
 

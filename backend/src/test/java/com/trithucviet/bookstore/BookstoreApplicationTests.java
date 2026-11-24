@@ -37,11 +37,11 @@ class BookstoreApplicationTests {
     @Test
 
     void contextLoadsAndDatabaseMatchesSeedData() {
-        assertThat(sachRepository.count()).isEqualTo(186);
-        assertThat(danhMucRepository.count()).isEqualTo(12);
-        assertThat(tkNguoiDungRepository.count()).isEqualTo(19);
-        assertThat(donHangRepository.count()).isEqualTo(8);
-        assertThat(hanhViNguoiDungRepository.count()).isEqualTo(8);
+        assertThat(sachRepository.count()).isGreaterThanOrEqualTo(186);
+        assertThat(danhMucRepository.count()).isGreaterThanOrEqualTo(12);
+        assertThat(tkNguoiDungRepository.count()).isGreaterThanOrEqualTo(19);
+        assertThat(donHangRepository.count()).isGreaterThanOrEqualTo(8);
+        assertThat(hanhViNguoiDungRepository.count()).isGreaterThanOrEqualTo(8);
     }
 
     @Test

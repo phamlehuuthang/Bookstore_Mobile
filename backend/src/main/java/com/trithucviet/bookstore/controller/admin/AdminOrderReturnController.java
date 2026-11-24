@@ -1,11 +1,15 @@
 package com.trithucviet.bookstore.controller.admin;
 
+import com.trithucviet.bookstore.dto.request.ProcessReturnRequest;
 import com.trithucviet.bookstore.dto.request.UpdateOrderStatusRequest;
 import com.trithucviet.bookstore.dto.response.ApiResponse;
 import com.trithucviet.bookstore.dto.response.OrderDto;
+import com.trithucviet.bookstore.dto.response.ReturnRequestDto;
+import com.trithucviet.bookstore.entity.enums.TrangThaiDoiTra;
 import com.trithucviet.bookstore.entity.enums.TrangThaiDon;
 import com.trithucviet.bookstore.entity.enums.VaiTro;
 import com.trithucviet.bookstore.service.OrderService;
+import com.trithucviet.bookstore.service.ReviewReturnService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,9 +41,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminOrderReturnController {
 
     private final OrderService orderService;
+    private final ReviewReturnService reviewReturnService;
 
-    public AdminOrderReturnController(OrderService orderService) {
+    public AdminOrderReturnController(
+            OrderService orderService,
+            ReviewReturnService reviewReturnService
+    ) {
         this.orderService = orderService;
+        this.reviewReturnService = reviewReturnService;
     }
 
     // Lấy toàn bộ danh sách đơn hàng cho Web Admin (hỗ trợ lọc theo trạng thái và từ khóa mã đơn/tên/SĐT)
@@ -73,6 +82,31 @@ public class AdminOrderReturnController {
         return ApiResponse.ok(
                 "Cập nhật trạng thái đơn hàng thành công",
                 orderService.updateOrderStatusByStaff(id, request, resolveRole(authentication))
+        );
+    }
+
+    // Lấy danh sách tất cả yêu cầu đổi trả (chỉ ADMIN & CSKH; chặn WAREHOUSE_MANAGER 403)
+    @GetMapping("/returns")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CSKH')")
+    public ApiResponse<List<ReturnRequestDto>> getReturnRequests(
+            @RequestParam(name = "trangThai", required = false) TrangThaiDoiTra trangThai
+    ) {
+        return ApiResponse.ok(
+                "Lấy danh sách yêu cầu đổi trả thành công",
+                reviewReturnService.getAdminReturnRequests(trangThai)
+        );
+    }
+
+    // Duyệt (DA_CHAP_THUAN) hoặc Từ chối (TU_CHOI) yêu cầu đổi trả của 1 đơn hàng (chỉ ADMIN & CSKH)
+    @PatchMapping("/{id}/return")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CSKH')")
+    public ApiResponse<ReturnRequestDto> processReturnRequest(
+            @PathVariable("id") String id,
+            @Valid @RequestBody ProcessReturnRequest request
+    ) {
+        return ApiResponse.ok(
+                "Xử lý yêu cầu đổi trả thành công",
+                reviewReturnService.processReturnByOrderId(id, request)
         );
     }
 

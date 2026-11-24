@@ -543,24 +543,28 @@ export const bookService = {
     comment: string;
     imageUrls?: string[];
   }): Promise<Review> {
-    const newReview: Review = {
-      id: `rev-${Date.now()}`,
-      bookId: payload.bookId,
+    const dto = await apiRequest<BackendReviewDto>('/api/v1/reviews', {
+      method: 'POST',
+      body: {
+        donHangId: payload.orderId,
+        sachId: payload.bookId,
+        soSao: payload.rating,
+        binhLuan: payload.comment.trim(),
+        anhDanhGiaUrls: payload.imageUrls?.filter((u) => u && u.trim()) || [],
+      },
+    });
+    return {
+      id: dto.id,
+      bookId: dto.sachId,
       bookTitle: payload.bookTitle,
-      userId: payload.userId,
-      userName: payload.userName,
+      userId: dto.nguoiDungId,
+      userName: dto.tenNguoiDung || payload.userName,
       orderId: payload.orderId,
-      rating: payload.rating,
-      comment: payload.comment,
-      imageUrls: payload.imageUrls || [],
-      createdAt: new Date().toISOString(),
+      rating: Number(dto.soSao ?? payload.rating),
+      comment: dto.binhLuan,
+      imageUrls: dto.anhDanhGiaUrls || [],
+      createdAt: dto.ngayTao || new Date().toISOString(),
       isHidden: false,
     };
-    db.reviews.unshift(newReview);
-    const order = db.orders.find((o) => o.id === payload.orderId);
-    if (order) {
-      order.isReviewed = true;
-    }
-    return newReview;
   },
 };

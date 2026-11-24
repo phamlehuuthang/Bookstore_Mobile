@@ -174,10 +174,23 @@ export const Vouchers: React.FC = () => {
   const handleSendPush = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pushTitle.trim() || !pushMsg.trim()) return;
-    await adminSystemService.sendPushNotification(pushTitle.trim(), pushMsg.trim());
-    setPushFeedback(`Đã phát thông báo đẩy "${pushTitle}" tới hệ thống!`);
-    setPushTitle('');
-    setPushMsg('');
+    setErrorMsg(null);
+    setPushFeedback(null);
+    try {
+      const result = await adminSystemService.sendPushNotification(
+        pushTitle.trim(),
+        pushMsg.trim()
+      );
+      setPushFeedback(
+        `Đã phát sóng thông báo "${pushTitle.trim()}" tới ${result.recipients} khách hàng!`
+      );
+      setPushTitle('');
+      setPushMsg('');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể phát sóng thông báo lúc này.'
+      );
+    }
   };
 
   return (

@@ -7,6 +7,7 @@ import com.trithucviet.bookstore.dto.request.UpdateOrderStatusRequest;
 import com.trithucviet.bookstore.dto.response.OrderDto;
 import com.trithucviet.bookstore.dto.response.OrderItemDto;
 import com.trithucviet.bookstore.dto.response.OrderTimelineDto;
+import com.trithucviet.bookstore.dto.response.ReturnRequestDto;
 import com.trithucviet.bookstore.dto.response.VoucherValidationResponse;
 import com.trithucviet.bookstore.entity.ChiTietDonHang;
 import com.trithucviet.bookstore.entity.DonHang;
@@ -17,6 +18,7 @@ import com.trithucviet.bookstore.entity.Sach;
 import com.trithucviet.bookstore.entity.SoDiaChi;
 import com.trithucviet.bookstore.entity.ThongBao;
 import com.trithucviet.bookstore.entity.TkNguoiDung;
+import com.trithucviet.bookstore.entity.YeuCauDoiTra;
 import com.trithucviet.bookstore.entity.enums.LoaiThongBao;
 import com.trithucviet.bookstore.entity.enums.PhuongThucThanhToan;
 import com.trithucviet.bookstore.entity.enums.TrangThaiDon;
@@ -32,11 +34,13 @@ import com.trithucviet.bookstore.repository.SachRepository;
 import com.trithucviet.bookstore.repository.SoDiaChiRepository;
 import com.trithucviet.bookstore.repository.ThongBaoRepository;
 import com.trithucviet.bookstore.repository.TkNguoiDungRepository;
+import com.trithucviet.bookstore.repository.YeuCauDoiTraRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -74,6 +78,7 @@ public class OrderService {
     private final TkNguoiDungRepository tkNguoiDungRepository;
     private final MaGiamGiaRepository maGiamGiaRepository;
     private final ThongBaoRepository thongBaoRepository;
+    private final YeuCauDoiTraRepository yeuCauDoiTraRepository;
     private final VoucherService voucherService;
 
     public OrderService(
@@ -86,6 +91,7 @@ public class OrderService {
             TkNguoiDungRepository tkNguoiDungRepository,
             MaGiamGiaRepository maGiamGiaRepository,
             ThongBaoRepository thongBaoRepository,
+            YeuCauDoiTraRepository yeuCauDoiTraRepository,
             VoucherService voucherService
     ) {
         this.donHangRepository = donHangRepository;
@@ -97,6 +103,7 @@ public class OrderService {
         this.tkNguoiDungRepository = tkNguoiDungRepository;
         this.maGiamGiaRepository = maGiamGiaRepository;
         this.thongBaoRepository = thongBaoRepository;
+        this.yeuCauDoiTraRepository = yeuCauDoiTraRepository;
         this.voucherService = voucherService;
     }
 
@@ -659,11 +666,17 @@ public class OrderService {
             timelineByOrder.computeIfAbsent(event.getDonHang().getId(), k -> new ArrayList<>()).add(event);
         }
 
+        Map<String, YeuCauDoiTra> returnByOrder = new HashMap<>();
+        for (YeuCauDoiTra req : yeuCauDoiTraRepository.findByDonHangIdInWithOrder(orderIds)) {
+            returnByOrder.put(req.getDonHang().getId(), req);
+        }
+
         return orders.stream()
                 .map(order -> toOrderDto(
                         order,
                         itemsByOrder.getOrDefault(order.getId(), List.of()),
-                        timelineByOrder.getOrDefault(order.getId(), List.of())
+                        timelineByOrder.getOrDefault(order.getId(), List.of()),
+                        returnByOrder.get(order.getId())
                 ))
                 .toList();
     }
@@ -672,6 +685,16 @@ public class OrderService {
             DonHang order,
             List<ChiTietDonHang> items,
             List<LichSuDonHang> timeline
+    ) {
+        YeuCauDoiTra returnReq = yeuCauDoiTraRepository.findByDonHangIdWithOrder(order.getId()).orElse(null);
+        return toOrderDto(order, items, timeline, returnReq);
+    }
+
+    private OrderDto toOrderDto(
+            DonHang order,
+            List<ChiTietDonHang> items,
+            List<LichSuDonHang> timeline,
+            YeuCauDoiTra returnRequest
     ) {
         List<OrderItemDto> itemDtos = items.stream()
                 .map(item -> {
@@ -700,6 +723,20 @@ public class OrderService {
                 ))
                 .toList();
 
+        ReturnRequestDto returnDto = returnRequest == null ? null : new ReturnRequestDto(
+                returnRequest.getId(),
+                order.getId(),
+                order.getMaDonHang(),
+                order.getTenKhachHang(),
+                returnRequest.getLyDo(),
+                returnRequest.getMoTa(),
+                splitUrls(returnRequest.getAnhMinhChungUrls()),
+                returnRequest.getTrangThai(),
+                returnRequest.getGhiChuAdmin(),
+                returnRequest.getNgayTao(),
+                returnRequest.getNgayXuLy()
+        );
+
         return new OrderDto(
                 order.getId(),
                 order.getMaDonHang(),
@@ -719,8 +756,19 @@ public class OrderService {
                 Boolean.TRUE.equals(order.getDaDanhGia()),
                 order.getNgayTao(),
                 itemDtos,
-                timelineDtos
+                timelineDtos,
+                returnDto
         );
+    }
+
+    private List<String> splitUrls(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     private LichSuDonHang appendTimeline(

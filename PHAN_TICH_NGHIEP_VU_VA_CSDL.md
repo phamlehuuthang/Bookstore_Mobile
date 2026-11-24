@@ -310,9 +310,13 @@ erDiagram
 
 #### B. Quy tắc Nghiệp vụ (Business Rules)
 - **Quy tắc 5.1 — Điều kiện mở khóa nút Đánh giá & Đổi trả:**
-  - Chỉ những đơn hàng có `status = 'DELIVERED'` (Đã giao thành công) mới hiển thị nút **Đánh giá ★** và nút **Đổi trả** trên Mobile App.
-- **Quy tắc 5.2 — Kiểm duyệt bình luận:**
-  - Admin có quyền chuyển `reviews.is_hidden = true` đối với các bình luận quảng cáo/spam. Mobile App chỉ hiển thị các bình luận có `is_hidden = false`.
+  - Chỉ những đơn hàng của chính khách hàng và có `trang_thai_don = 'DA_GIAO'` (`DELIVERED`) mới được phép gửi **Đánh giá ★** và **Yêu cầu Đổi trả**.
+  - **Đánh giá đơn nhiều cuốn:** Khách có thể truyền `sachId` thuộc đơn hàng để đánh giá từng đầu sách (nếu không truyền mặc định chọn cuốn đầu tiên); chặn đánh giá trùng cặp `(don_hang_id, sach_id)`. Ngay sau khi lưu, hệ thống tự động tính lại `sach.diem_danh_gia_tb` và `sach.so_luot_danh_gia` từ các đánh giá công khai (`bi_an = false`). Khi toàn bộ đầu sách khác nhau trong đơn đã được đánh giá, tự động bật `don_hang.da_danh_gia = true`.
+- **Quy tắc 5.2 — Kiểm duyệt bình luận (ADMIN & CSKH):**
+  - `ADMIN` và `CSKH` có quyền chuyển `danh_gia.bi_an` (`is_hidden`) đối với các bình luận quảng cáo/spam (khối Kho `WAREHOUSE_MANAGER` bị chặn `403`). Mobile App chỉ hiển thị các bình luận có `bi_an = false`, và điểm sao trung bình của sách được tính lại tự động sau mỗi lần ẩn/hiện.
+- **Quy tắc 5.3 — Xử lý Yêu cầu Đổi/Trả hàng (Đổi sách mới — ADMIN & CSKH):**
+  - Mỗi đơn hàng `DA_GIAO` chỉ được gửi tối đa **1 yêu cầu đổi trả** (ràng buộc `UNIQUE` 1-1 trên `don_hang_id`).
+  - Khi `ADMIN` hoặc `CSKH` phê duyệt (`DA_CHAP_THUAN` — đổi cuốn sách mới) hoặc từ chối (`TU_CHOI`), hệ thống cập nhật `trang_thai`, `ghi_chu_admin`, `ngay_xu_ly` và tự động gửi `thong_bao` về kết quả cho khách hàng (không trừ/cộng lại `sach.ton_kho` hay đổi `trang_thai_thanh_toan`).
 
 ---
 
@@ -320,7 +324,8 @@ erDiagram
 
 #### A. Thiết kế Bảng Thông báo & Cấu hình
 1. **Bảng `thong_bao` (`notifications` — Thông báo đẩy):**
-   - Các cột: `id` (PK), `nguoi_dung_id` (FK Nullable — nếu `NULL` là thông báo khuyến mãi gửi cho toàn bộ khách hàng), `tieu_de`, `noi_dung`, `loai_thong_bao` (`'DON_HANG'` | `'KHUYEN_MAI'` | `'HE_THONG'`), `da_doc` (`DEFAULT FALSE`), `ngay_tao`.
+   - Các cột: `id` (PK), `nguoi_dung_id` (FK Nullable — hỗ trợ các dòng thông báo chung cũ toàn hệ thống như `tb_02`), `tieu_de`, `noi_dung`, `loai_thong_bao` (`'DON_HANG'` | `'KHUYEN_MAI'` | `'HE_THONG'`), `da_doc` (`DEFAULT FALSE`), `ngay_tao`.
+   - **Cơ chế Phát sóng (Broadcast) & Đánh dấu đã đọc độc lập:** Khi `ADMIN` hoặc `CSKH` phát sóng thông báo mới (`POST /api/admin/notifications/broadcast`), hệ thống tạo **1 bản ghi riêng cho từng tài khoản `CUSTOMER`** để mỗi khách hàng quản lý trạng thái `da_doc` độc lập mà không cần thêm bảng mới. Các dòng thông báo chung cũ (`nguoi_dung_id IS NULL`) vẫn hiển thị cho mọi khách nhưng không bị ghi đè `da_doc` trong CSDL khi một khách bấm đọc.
 2. **Bảng `cau_hinh_cua_hang` (`store_configs` — tạm ẩn trong CSDL để bổ sung sau):**
    - Các cột: `id` (PK), `ten_cua_hang`, `khau_hieu`, `logo_url`, `hotline`, `email_ho_tro`, `dia_chi_tru_so`, `phi_ship_mac_dinh` (`25000`), `mien_phi_ship_tu` (`300000`), `nguong_canh_bao_ton_kho` (`5`), `ngan_hang_ten`, `ngan_hang_so_tk`, `ngan_hang_chu_tk`.
 

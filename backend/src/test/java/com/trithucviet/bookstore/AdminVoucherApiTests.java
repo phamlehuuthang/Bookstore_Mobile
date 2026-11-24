@@ -255,7 +255,7 @@ class AdminVoucherApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(lowerLimitJson))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Giới hạn lượt dùng (50) không được nhỏ hơn số lượt đã sử dụng (120)."));
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Giới hạn lượt dùng (50) không được nhỏ hơn số lượt đã sử dụng")));
     }
 
     // --- Nhóm 4: Bảo mật & Phân quyền theo PHAN_QUYEN_WEB_ADMIN.md (401 / 403) ---

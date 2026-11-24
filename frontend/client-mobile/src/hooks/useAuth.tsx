@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Address, NotificationItem, User } from '@shared/types';
-import { INITIAL_NOTIFICATIONS } from '@shared/api-client/mockData';
 import { authService } from '@/services/authService';
 import {
   cartWishlistVoucherService,
   WishlistBookItem,
 } from '@/services/cartWishlistVoucherService';
+import { notificationService } from '@/services/notificationService';
 
 interface AuthContextValue {
   user: User | null;
@@ -31,7 +31,9 @@ interface AuthContextValue {
   // Trả về false nếu khách chưa đăng nhập để màn hình UI chủ động dẫn sang đăng nhập
   toggleWishlist: (bookId: string) => Promise<boolean>;
   refreshWishlist: () => Promise<void>;
-  markAllNotificationsRead: () => void;
+  refreshNotifications: () => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -45,8 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isHydrating, setIsHydrating] = useState<boolean>(true);
   const [wishlistItems, setWishlistItems] = useState<WishlistBookItem[]>([]);
 
-  // Phần Thông báo tạm giữ nguyên dữ liệu mẫu cho đến khi nối Bước 7 lên frontend
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  // Danh sách thông báo thật từ PostgreSQL (GET /api/v1/notifications - Bước 7)
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // Tự động khôi phục phiên từ JWT đã lưu mỗi lần ứng dụng khởi động
   useEffect(() => {
@@ -69,10 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Mỗi khi user thay đổi (đăng nhập / khôi phục phiên / đăng xuất), tự đồng bộ Tủ sách yêu thích thật từ PostgreSQL
+  // Mỗi khi user thay đổi (đăng nhập / khôi phục phiên / đăng xuất), tự đồng bộ Tủ sách yêu thích & Thông báo từ PostgreSQL
   useEffect(() => {
     if (!user) {
       setWishlistItems([]);
+      setNotifications([]);
       return;
     }
 
@@ -87,6 +90,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {
         if (active) {
           setWishlistItems([]);
+        }
+      });
+
+    notificationService
+      .getNotifications()
+      .then((list) => {
+        if (active) {
+          setNotifications(list);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setNotifications([]);
         }
       });
 
@@ -168,7 +184,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  const markAllNotificationsRead = () => {
+  const refreshNotifications = async () => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const list = await notificationService.getNotifications();
+    setNotifications(list);
+  };
+
+  const markNotificationRead = async (notificationId: string) => {
+    if (!user) return;
+    const updated = await notificationService.markAsRead(notificationId);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, isRead: updated.isRead } : n))
+    );
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!user) return;
+    await notificationService.markAllAsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
@@ -191,6 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         deleteAddress,
         toggleWishlist,
         refreshWishlist,
+        refreshNotifications,
+        markNotificationRead,
         markAllNotificationsRead,
       }}
     >

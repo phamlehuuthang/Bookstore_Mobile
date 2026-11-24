@@ -29,6 +29,7 @@ public record OrderDto(
         Boolean daDanhGia,
         LocalDateTime ngayTao,
         List<OrderItemDto> items,
-        List<OrderTimelineDto> timeline
+        List<OrderTimelineDto> timeline,
+        ReturnRequestDto returnRequest
 ) {
 }

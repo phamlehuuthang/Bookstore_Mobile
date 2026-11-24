@@ -1,9 +1,9 @@
-import { apiClient } from '@shared/index';
 import {
   Order,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
+  ReturnRequest,
   ReturnStatus,
 } from '@shared/types';
 import { adminRequest } from './adminHttpClient';
@@ -25,6 +25,21 @@ interface BackendOrderTimelineDto {
   tieuDe: string;
   moTa: string | null;
   thoiGian: string;
+}
+
+interface BackendReturnRequestDto {
+  id: string;
+  donHangId: string;
+  maDonHang: string;
+  tenKhachHang: string;
+  sdtKhachHang: string;
+  lyDo: string;
+  moTa: string;
+  anhMinhChungUrls: string[];
+  trangThai: 'CHO_DUYET' | 'DA_CHAP_THUAN' | 'TU_CHOI';
+  ghiChuAdmin: string | null;
+  ngayTao: string;
+  ngayXuLy: string | null;
 }
 
 interface BackendOrderDto {
@@ -52,6 +67,7 @@ interface BackendOrderDto {
   ngayTao: string;
   items: BackendOrderItemDto[];
   timeline: BackendOrderTimelineDto[];
+  returnRequest?: BackendReturnRequestDto | null;
 }
 
 function mapStatusToUi(status: BackendOrderDto['trangThaiDon']): OrderStatus {
@@ -112,6 +128,35 @@ function mapPaymentStatus(
   }
 }
 
+function mapReturnStatusToUi(
+  status: BackendReturnRequestDto['trangThai']
+): ReturnStatus {
+  switch (status) {
+    case 'CHO_DUYET':
+      return 'PENDING';
+    case 'DA_CHAP_THUAN':
+      return 'APPROVED';
+    case 'TU_CHOI':
+      return 'REJECTED';
+  }
+}
+
+function mapReturnRequest(dto: BackendReturnRequestDto): ReturnRequest {
+  return {
+    id: dto.id,
+    orderId: dto.donHangId,
+    orderCode: dto.maDonHang,
+    customerName: dto.tenKhachHang,
+    reason: dto.lyDo,
+    description: dto.moTa,
+    evidenceImages: dto.anhMinhChungUrls || [],
+    status: mapReturnStatusToUi(dto.trangThai),
+    adminNote: dto.ghiChuAdmin ?? undefined,
+    createdAt: dto.ngayTao,
+    resolvedAt: dto.ngayXuLy ?? undefined,
+  };
+}
+
 function mapOrder(dto: BackendOrderDto): Order {
   return {
     id: dto.id,
@@ -154,6 +199,7 @@ function mapOrder(dto: BackendOrderDto): Order {
       description: step.moTa || '',
       timestamp: step.thoiGian,
     })),
+    returnRequest: dto.returnRequest ? mapReturnRequest(dto.returnRequest) : undefined,
     isReviewed: Boolean(dto.daDanhGia),
     createdAt: dto.ngayTao,
     updatedAt: dto.ngayTao,
@@ -193,12 +239,22 @@ export const adminOrderService = {
       return mapOrder(updated);
     },
 
-      // Phần duyệt Đổi/Trả hàng sẽ nối sang API Bước 7 ngay sau Bước 6
+      // Bước 7 - Phần 2: Phê duyệt / Từ chối yêu cầu đổi trả qua PATCH /api/admin/orders/{id}/return
       async handleReturnRequest(
         orderId: string,
         status: ReturnStatus,
         adminNote: string
-      ): Promise < Order > {
-        return apiClient.resolveReturnRequest(orderId, status, adminNote);
+      ): Promise<ReturnRequest> {
+        const dto = await adminRequest<BackendReturnRequestDto>(
+          `/api/admin/orders/${encodeURIComponent(orderId)}/return`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              trangThai: status === 'APPROVED' ? 'DA_CHAP_THUAN' : 'TU_CHOI',
+              ghiChuAdmin: adminNote?.trim() || undefined,
+            }),
+          }
+        );
+        return mapReturnRequest(dto);
       },
 };

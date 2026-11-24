@@ -167,13 +167,26 @@ export const Orders: React.FC = () => {
 
   const handleResolveReturn = async (decision: 'APPROVED' | 'REJECTED') => {
     if (!inspectingReturnOrder) return;
-    await adminOrderService.handleReturnRequest(
-      inspectingReturnOrder.id,
-      decision,
-      adminNote
-    );
-    setInspectingReturnOrder(null);
-    await loadOrders();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await adminOrderService.handleReturnRequest(
+        inspectingReturnOrder.id,
+        decision,
+        adminNote
+      );
+      setSuccessMsg(
+        decision === 'APPROVED'
+          ? `Đã phê duyệt đổi sách mới cho đơn ${inspectingReturnOrder.orderCode}.`
+          : `Đã từ chối yêu cầu đổi trả của đơn ${inspectingReturnOrder.orderCode}.`
+      );
+      setInspectingReturnOrder(null);
+      await loadOrders(true);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể xử lý yêu cầu đổi trả.'
+      );
+    }
   };
 
   const filtered =
@@ -315,13 +328,20 @@ export const Orders: React.FC = () => {
                 Hủy đơn
               </button>
             )}
-            {o.returnRequest && (
+            {o.returnRequest && (currentStaff.role === 'ADMIN' || currentStaff.role === 'CSKH') && (
               <button
                 type="button"
-                onClick={() => setInspectingReturnOrder(o)}
+                onClick={() => {
+                  setAdminNote(
+                    o.returnRequest?.adminNote || 'Đồng ý đổi mới sách miễn phí qua bưu điện.'
+                  );
+                  setInspectingReturnOrder(o);
+                }}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer"
               >
-                Xem ảnh & Duyệt đổi trả
+                {o.returnRequest.status === 'PENDING'
+                  ? 'Xem ảnh & Duyệt đổi trả'
+                  : 'Xem kết quả đổi trả'}
               </button>
             )}
           </div>
@@ -477,22 +497,33 @@ export const Orders: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => handleResolveReturn('REJECTED')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold cursor-pointer"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Từ chối yêu cầu
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleResolveReturn('APPROVED')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Phê duyệt Đổi mới
-                    </button>
+                    {inspectingReturnOrder.returnRequest.status === 'PENDING' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveReturn('REJECTED')}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50 text-xs font-bold cursor-pointer"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Từ chối yêu cầu
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveReturn('APPROVED')}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Phê duyệt Đổi mới
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs font-bold text-slate-600">
+                        Trạng thái đã xử lý:{' '}
+                        {inspectingReturnOrder.returnRequest.status === 'APPROVED'
+                          ? 'Đã chấp thuận đổi mới'
+                          : 'Đã từ chối'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
