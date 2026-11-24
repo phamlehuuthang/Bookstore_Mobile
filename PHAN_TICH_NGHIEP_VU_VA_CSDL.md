@@ -206,7 +206,7 @@ erDiagram
 
 #### B. Quy tắc Nghiệp vụ (Business Rules)
 - **Quy tắc 3.1 — Cảnh báo sách sắp hết hàng tự động:**
-  - Hệ thống kiểm tra điều kiện `books.stock < 5` (ngưỡng cấu hình tại `store_configs.low_stock_threshold`). Nếu nhỏ hơn 5 cuốn, tự động bật cảnh báo đỏ trên Sidebar, Chuông thông báo và trang Quản lý Kho của Admin.
+  - Hệ thống kiểm tra điều kiện `sach.ton_kho <= 5` (ngưỡng cảnh báo thống nhất 5 cuốn ở cả Backend và Web Admin). Nếu nhỏ hơn hoặc bằng 5 cuốn, tự động bật cảnh báo trên Chuông thông báo, Dashboard và trang Quản lý Kho của Admin/Quản lý Kho.
 - **Quy tắc 3.2 — Tự động cộng tồn kho khi lập phiếu nhập:**
   - Ngay khi tạo phiếu nhập thành công, hệ thống tự động cập nhật:
     $$\text{books.stock}_{\text{mới}} = \text{books.stock}_{\text{cũ}} + \text{quantity}$$

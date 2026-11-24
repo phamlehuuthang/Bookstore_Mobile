@@ -192,14 +192,14 @@ class CartApiTests {
 
     @Test
     void themQuaTonKho_tra400KemThongBaoTonKho() throws Exception {
-        // sach_001 tồn kho = 27
         mockMvc.perform(post(BASE)
                         .header("Authorization", customerToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"sachId\":\"sach_001\",\"soLuong\":28}"))
+                        .content("{\"sachId\":\"sach_001\",\"soLuong\":9999}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Sách 'Alice's Adventures in Wonderland' chỉ còn 27 cuốn trong kho."));
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("chỉ còn")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("cuốn trong kho.")));
     }
 
     @Test

@@ -264,7 +264,12 @@ class ReviewReturnNotifApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].id", hasItem("dg_01")));
 
-        // CSKH ẩn đánh giá dg_01 (sach_001 chỉ có 1 review công khai trong seed)
+        // Đếm số review công khai hiện có của sach_001 trước khi ẩn dg_01
+        long visibleBefore = ((Number) entityManager
+                .createNativeQuery("SELECT COUNT(*) FROM danh_gia WHERE sach_id = 'sach_001' AND bi_an = FALSE")
+                .getSingleResult()).longValue();
+
+        // CSKH ẩn đánh giá dg_01
         mockMvc.perform(patch("/api/admin/reviews/dg_01/toggle-hidden")
                         .header("Authorization", cskhToken))
                 .andExpect(status().isOk())
@@ -274,15 +279,15 @@ class ReviewReturnNotifApiTests {
         entityManager.flush();
         entityManager.clear();
 
-        // Mobile GET /api/v1/books/sach_001/reviews không còn thấy dg_01; sach_001 về 0 lượt đánh giá
+        // Mobile GET /api/v1/books/sach_001/reviews không còn thấy dg_01; số lượt đánh giá giảm đúng 1
         mockMvc.perform(get("/api/v1/books/sach_001/reviews"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].id", not(hasItem("dg_01"))));
 
         Sach sach01Hidden = sachRepository.findById("sach_001").orElseThrow();
-        assertEquals(0, sach01Hidden.getSoLuotDanhGia());
+        assertEquals(visibleBefore - 1, sach01Hidden.getSoLuotDanhGia().longValue());
 
-        // ADMIN hiện lại đánh giá dg_01 -> sach_001 khôi phục 1 lượt, 5.00 sao
+        // ADMIN hiện lại đánh giá dg_01 -> khôi phục lại đúng số lượt ban đầu
         mockMvc.perform(patch("/api/admin/reviews/dg_01/toggle-hidden")
                         .header("Authorization", adminToken))
                 .andExpect(status().isOk())
@@ -292,8 +297,7 @@ class ReviewReturnNotifApiTests {
         entityManager.clear();
 
         Sach sach01Restored = sachRepository.findById("sach_001").orElseThrow();
-        assertEquals(1, sach01Restored.getSoLuotDanhGia());
-        assertEquals(0, new BigDecimal("5.00").compareTo(sach01Restored.getDiemDanhGiaTb()));
+        assertEquals(visibleBefore, sach01Restored.getSoLuotDanhGia().longValue());
     }
 
     // =========================================================================

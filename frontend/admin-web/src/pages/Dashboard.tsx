@@ -4,28 +4,57 @@ import {
   AlertTriangle,
   ArrowRight,
   BadgeDollarSign,
+  RotateCcw,
   ShoppingBag,
   TrendingUp,
   UserPlus,
 } from 'lucide-react';
 import { Book, DashboardStats, formatCurrencyVND } from '@shared/types';
+import { useAdminStaff } from '@/layouts/AdminLayout';
 import { adminStatsService } from '@/services/adminStatsService';
 import { StatCard } from '@/components/StatCard';
 import { RevenueChart } from '@/components/RevenueChart';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const currentStaff = useAdminStaff();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [canViewFinance, setCanViewFinance] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [topBooks, setTopBooks] = useState<Book[]>([]);
   const [lowStockBooks, setLowStockBooks] = useState<Book[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    adminStatsService.getDashboardStats().then((res) => {
-      setStats(res.stats);
-      setTopBooks(res.topSellingBooks);
-      setLowStockBooks(res.lowStockBooks);
-    });
-  }, []);
+    let active = true;
+    adminStatsService
+      .getDashboardStats()
+      .then((res) => {
+        if (!active) return;
+        setStats(res.stats);
+        setCanViewFinance(res.canViewFinance);
+        setLowStockThreshold(res.lowStockThreshold);
+        setTopBooks(res.topSellingBooks);
+        setLowStockBooks(res.lowStockBooks);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setErrorMsg(
+          err instanceof Error ? err.message : 'Không thể tải số liệu thống kê Dashboard.'
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentStaff.role]);
+
+  if (errorMsg) {
+    return (
+      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium">
+        {errorMsg}
+      </div>
+    );
+  }
 
   if (!stats) {
     return (
@@ -37,117 +66,169 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  const canManageInventory =
+    currentStaff.role === 'ADMIN' || currentStaff.role === 'WAREHOUSE_MANAGER';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            Dashboard Quản Trị & Thống Kê Doanh Nghiệp
+            Dashboard Quản Trị & Thống Kê Vận Hành
           </h1>
           <p className="text-sm text-slate-500">
-            Số liệu kinh doanh thời gian thực của hệ sinh thái Tri Thức Việt BookStore
+            {currentStaff.role === 'ADMIN'
+              ? 'Số liệu doanh thu, đơn hàng, khách hàng và tồn kho thời gian thực từ PostgreSQL'
+              : currentStaff.role === 'WAREHOUSE_MANAGER'
+                ? 'Theo dõi tình trạng tồn kho, cảnh báo sách sắp hết hàng và đầu sách bán chạy'
+                : 'Theo dõi đơn hàng chờ duyệt, yêu cầu đổi trả và hỗ trợ khách hàng'}
           </p>
         </div>
       </div>
 
-      {/* KPI STAT CARDS */}
+      {/* KPI STAT CARDS (Lọc theo RBAC: WAREHOUSE_MANAGER & CSKH không thấy doanh thu) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          title="Doanh thu tháng này"
-          value={formatCurrencyVND(stats.totalRevenue)}
-          growth={stats.revenueGrowth}
-          subtitle="so với tháng trước"
-          icon={BadgeDollarSign}
-          tone="emerald"
-        />
+        {canViewFinance ? (
+          <StatCard
+            title="Tổng doanh thu (Đơn đã giao)"
+            value={formatCurrencyVND(stats.totalRevenue)}
+            growth={stats.revenueGrowth}
+            subtitle="so với tháng trước"
+            icon={BadgeDollarSign}
+            tone="emerald"
+          />
+        ) : (
+          <StatCard
+            title="Đơn hàng chờ xác nhận"
+            value={`${stats.pendingOrdersCount} đơn`}
+            subtitle="cần xử lý sớm"
+            icon={ShoppingBag}
+            tone="amber"
+          />
+        )}
+
         <StatCard
           title="Tổng đơn hàng hoàn tất"
           value={`${stats.totalOrders} đơn`}
-          growth={stats.ordersGrowth}
-          subtitle="tỷ lệ giao thành công 98.4%"
+          subtitle={`${stats.pendingOrdersCount} đơn đang chờ duyệt`}
           icon={ShoppingBag}
           tone="blue"
         />
-        <StatCard
-          title="Khách hàng mới đăng ký"
-          value={`${stats.newCustomers} độc giả`}
-          growth={stats.customersGrowth}
-          subtitle="từ Mobile App Android/iOS"
-          icon={UserPlus}
-          tone="emerald"
-        />
-        <StatCard
-          title="Cảnh báo Sách sắp hết (< 5)"
-          value={`${stats.lowStockCount} đầu sách`}
-          subtitle={`${stats.pendingReturnsCount} yêu cầu đổi trả chờ duyệt`}
-          icon={AlertTriangle}
-          tone="amber"
-        />
+
+        {currentStaff.role !== 'WAREHOUSE_MANAGER' ? (
+          <StatCard
+            title="Tổng khách hàng đăng ký"
+            value={`${stats.newCustomers} độc giả`}
+            subtitle="từ Mobile App"
+            icon={UserPlus}
+            tone="emerald"
+          />
+        ) : (
+          <StatCard
+            title="Top sách bán chạy"
+            value={`${topBooks.length} đầu sách`}
+            subtitle="cần ưu tiên tồn kho"
+            icon={TrendingUp}
+            tone="emerald"
+          />
+        )}
+
+        {canManageInventory ? (
+          <StatCard
+            title={`Cảnh báo Sách sắp hết (≤ ${lowStockThreshold})`}
+            value={`${stats.lowStockCount} đầu sách`}
+            subtitle={`${stats.pendingReturnsCount} yêu cầu đổi trả chờ duyệt`}
+            icon={AlertTriangle}
+            tone="amber"
+          />
+        ) : (
+          <StatCard
+            title="Yêu cầu đổi trả chờ duyệt"
+            value={`${stats.pendingReturnsCount} yêu cầu`}
+            subtitle="cần CSKH phản hồi"
+            icon={RotateCcw}
+            tone="amber"
+          />
+        )}
       </div>
 
-      {/* REVENUE CHART + LOW STOCK ALERTS */}
+      {/* REVENUE CHART (CHỈ ADMIN) + LOW STOCK ALERTS */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <RevenueChart
-            byDay={stats.revenueByDay}
-            byMonth={stats.revenueByMonth}
-            byYear={stats.revenueByYear}
-          />
-        </div>
-
-        {/* Low Stock Alert Card */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <h3 className="text-base font-bold text-slate-900">
-                  Cảnh báo Tồn kho (&lt; 5 cuốn)
-                </h3>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                {lowStockBooks.length} đầu sách
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {lowStockBooks.map((book) => (
-                <div
-                  key={book.id}
-                  className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={book.coverUrl}
-                      alt={book.title}
-                      className="w-10 h-14 rounded object-cover shrink-0 border border-slate-200"
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 truncate">
-                        {book.title}
-                      </div>
-                      <div className="text-xs text-slate-500">ISBN: {book.isbn}</div>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="inline-block px-2 py-1 rounded bg-rose-100 text-rose-700 text-xs font-bold">
-                      Còn {book.stock} cuốn
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {canViewFinance && (
+          <div className="xl:col-span-2">
+            <RevenueChart
+              byDay={stats.revenueByDay}
+              byMonth={stats.revenueByMonth}
+              byYear={stats.revenueByYear}
+            />
           </div>
+        )}
 
-          <button
-            type="button"
-            onClick={() => navigate('/inventory')}
-            className="mt-4 w-full py-2.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+        {/* Low Stock Alert Card (ADMIN & WAREHOUSE_MANAGER) */}
+        {canManageInventory && (
+          <div
+            className={`bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between ${
+              !canViewFinance ? 'xl:col-span-3' : ''
+            }`}
           >
-            <span>Tạo phiếu nhập kho ngay</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  <h3 className="text-base font-bold text-slate-900">
+                    Cảnh báo Tồn kho (&le; {lowStockThreshold} cuốn)
+                  </h3>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                  {lowStockBooks.length} đầu sách
+                </span>
+              </div>
+
+              {lowStockBooks.length === 0 ? (
+                <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800">
+                  Toàn bộ kho sách hiện đang ở mức tồn an toàn (&gt; {lowStockThreshold} cuốn).
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lowStockBooks.slice(0, 6).map((book) => (
+                    <div
+                      key={book.id}
+                      className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={book.coverUrl}
+                          alt={book.title}
+                          className="w-10 h-14 rounded object-cover shrink-0 border border-slate-200"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-slate-900 truncate">
+                            {book.title}
+                          </div>
+                          <div className="text-xs text-slate-500">ISBN: {book.isbn}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="inline-block px-2 py-1 rounded bg-rose-100 text-rose-700 text-xs font-bold">
+                          Còn {book.stock} cuốn
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/inventory')}
+              className="mt-4 w-full py-2.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            >
+              <span>Tạo phiếu nhập kho ngay</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* TOP SELLING BOOKS TABLE */}
@@ -156,7 +237,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-700" />
             <h3 className="text-base font-bold text-slate-900">
-              Top 5 Sách Bán Chạy Nhất Tháng
+              Top 5 Sách Bán Chạy Nhất
             </h3>
           </div>
           <button
@@ -176,7 +257,7 @@ export const Dashboard: React.FC = () => {
                 <th className="py-3 px-4">Danh mục</th>
                 <th className="py-3 px-4">Giá bán</th>
                 <th className="py-3 px-4">Số lượng đã bán</th>
-                <th className="py-3 px-4">Doanh thu ước tính</th>
+                {canViewFinance && <th className="py-3 px-4">Doanh thu ước tính</th>}
                 <th className="py-3 px-4">Tồn kho</th>
               </tr>
             </thead>
@@ -199,19 +280,21 @@ export const Dashboard: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-slate-600">{book.categoryName}</td>
-                    <td className="py-3 px-4 font-semibold text-emerald-700">
+                    <td className="py-3 px-4 font-semibold text-slate-900">
                       {formatCurrencyVND(unitPrice)}
                     </td>
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      {book.soldCount.toLocaleString('vi-VN')} cuốn
+                    <td className="py-3 px-4 font-bold text-emerald-700">
+                      {book.soldCount} cuốn
                     </td>
-                    <td className="py-3 px-4 font-semibold text-slate-800">
-                      {formatCurrencyVND(unitPrice * book.soldCount)}
-                    </td>
+                    {canViewFinance && (
+                      <td className="py-3 px-4 font-semibold text-slate-900">
+                        {formatCurrencyVND(unitPrice * book.soldCount)}
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                          book.stock < 5
+                          book.stock <= lowStockThreshold
                             ? 'bg-rose-100 text-rose-700'
                             : 'bg-emerald-50 text-emerald-700'
                         }`}
@@ -229,4 +312,3 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
-

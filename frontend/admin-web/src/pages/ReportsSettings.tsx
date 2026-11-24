@@ -20,6 +20,24 @@ export const ReportsSettings: React.FC = () => {
     setTimeout(() => setSavedBanner(false), 3000);
   };
 
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setExportError(null);
+    setIsExporting(true);
+    try {
+      await adminStatsService.exportRevenueExcelCsv();
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : 'Không thể tải file báo cáo doanh thu.'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (!config) return null;
 
   return (
@@ -30,18 +48,25 @@ export const ReportsSettings: React.FC = () => {
             Xuất Báo Cáo Doanh Thu & Cấu Hình Cửa Hàng
           </h1>
           <p className="text-sm text-slate-500">
-            Trích xuất báo cáo tài chính Excel/CSV và thiết lập thông tin thương hiệu, phí vận chuyển, ngân hàng
+            Trích xuất báo cáo tài chính Excel/CSV từ dữ liệu thật và thiết lập thông tin thương hiệu
           </p>
         </div>
         <button
           type="button"
-          onClick={() => adminStatsService.exportRevenueExcelCsv()}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold cursor-pointer"
+          disabled={isExporting}
+          onClick={handleExportCsv}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer"
         >
           <Download className="w-4 h-4" />
-          Tải Báo Cáo Tổng Hợp (Excel CSV)
+          {isExporting ? 'Đang xuất báo cáo...' : 'Tải Báo Cáo Tổng Hợp (Excel CSV)'}
         </button>
       </div>
+
+      {exportError && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+          {exportError}
+        </div>
+      )}
 
       {savedBanner && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-sm font-semibold text-emerald-800">

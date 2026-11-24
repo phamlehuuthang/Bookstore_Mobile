@@ -26,6 +26,7 @@ import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { orderService } from '@/services/orderService';
 import { EmptyStateView } from '@/components/common/StateViews';
+import { evaluateVoucher } from '@/utils/voucherEligibility';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -84,13 +85,18 @@ export default function CheckoutScreen() {
   const chosenAddress =
     addresses.find((a) => a.id === selectedAddressId) || addresses[0] || null;
 
-  // Tính số tiền giảm dự kiến của từng Voucher đối với đơn hiện tại
-  const calcEstimatedSaving = (v: Voucher): number => {
-    if (subtotal < v.minOrderValue) return 0;
-    if (v.discountType === 'FIXED') return v.discountValue;
-    const raw = (subtotal * v.discountValue) / 100;
-    return v.maxDiscountAmount ? Math.min(raw, v.maxDiscountAmount) : raw;
-  };
+  // Đánh giá điều kiện từng Voucher (danh mục + đơn tối thiểu) và sắp xếp mã đủ điều kiện lên đầu
+  const evaluatedVouchers = activeVouchers
+    .map((voucher) => ({
+      voucher,
+      evalInfo: evaluateVoucher(voucher, selectedItems, subtotal),
+    }))
+    .sort((a, b) => {
+      if (a.evalInfo.isEligible !== b.evalInfo.isEligible) {
+        return a.evalInfo.isEligible ? -1 : 1;
+      }
+      return b.evalInfo.estimatedSaving - a.evalInfo.estimatedSaving;
+    });
 
   const handleSelectVoucher = async (v: Voucher) => {
     setVoucherInput(v.code);
@@ -371,14 +377,14 @@ export default function CheckoutScreen() {
               </View>
             ) : null}
 
-            {/* Dải Thẻ Voucher Chọn Nhanh 1-Chạm */}
+            {/* Dải Thẻ Voucher Chọn Nhanh 1-Chạm (Hiển thị rõ điều kiện chuẩn sàn TMĐT) */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.quickTicketScroll}
             >
-              {activeVouchers.map((v) => {
-                const isEligible = subtotal >= v.minOrderValue;
+              {evaluatedVouchers.map(({ voucher: v, evalInfo }) => {
+                const isEligible = evalInfo.isEligible;
                 const isSelected = appliedVoucher?.code === v.code && discountAmount > 0;
                 return (
                   <Pressable
@@ -430,10 +436,19 @@ export default function CheckoutScreen() {
                     <Text style={styles.miniTicketTitle} numberOfLines={1}>
                       {v.title}
                     </Text>
-                    <Text style={styles.miniTicketCondition}>
+                    <Text style={styles.miniTicketMeta} numberOfLines={1}>
+                      {evalInfo.minOrderLabel} • {evalInfo.scopeLabel}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.miniTicketCondition,
+                        !isEligible && { color: colors.accent },
+                      ]}
+                      numberOfLines={1}
+                    >
                       {isEligible
-                        ? `Tiết kiệm ${formatCurrencyVND(calcEstimatedSaving(v))}`
-                        : `Thiếu ${formatCurrencyVND(v.minOrderValue - subtotal)}`}
+                        ? `Tiết kiệm ${formatCurrencyVND(evalInfo.estimatedSaving)}`
+                        : evalInfo.missingReason}
                     </Text>
                   </Pressable>
                 );
@@ -632,10 +647,10 @@ export default function CheckoutScreen() {
 
               {/* Danh sách tất cả Voucher */}
               <ScrollView contentContainerStyle={styles.modalVoucherList}>
-                {activeVouchers.map((v) => {
-                  const isEligible = subtotal >= v.minOrderValue;
+                {evaluatedVouchers.map(({ voucher: v, evalInfo }) => {
+                  const isEligible = evalInfo.isEligible;
                   const isSelected = appliedVoucher?.code === v.code && discountAmount > 0;
-                  const saving = calcEstimatedSaving(v);
+                  const saving = evalInfo.estimatedSaving;
 
                   return (
                     <Pressable
@@ -674,7 +689,10 @@ export default function CheckoutScreen() {
                           <Text style={styles.ticketExp}>HSD: {v.endDate}</Text>
                         </View>
                         <Text style={styles.ticketTitleText}>{v.title}</Text>
-                        <Text style={styles.ticketDescText}>{v.description}</Text>
+                        <Text style={styles.ticketDescText}>
+                          {evalInfo.minOrderLabel} • {evalInfo.scopeLabel}
+                          {v.remainingUses > 0 ? ` • Còn ${v.remainingUses} lượt` : ''}
+                        </Text>
 
                         {isEligible ? (
                           <Text style={styles.ticketEligibleText}>
@@ -682,7 +700,7 @@ export default function CheckoutScreen() {
                           </Text>
                         ) : (
                           <Text style={styles.ticketMissingText}>
-                            Mua thêm {formatCurrencyVND(v.minOrderValue - subtotal)} để dùng mã này
+                            {evalInfo.missingReason} để dùng mã này
                           </Text>
                         )}
                       </View>
@@ -956,6 +974,11 @@ const styles = StyleSheet.create({
   miniTicketTitle: {
     fontSize: 11,
     color: colors.textSecondary,
+  },
+  miniTicketMeta: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   miniTicketCondition: {
     fontSize: 10.5,

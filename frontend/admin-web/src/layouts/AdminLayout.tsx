@@ -24,8 +24,7 @@ import {
   TicketPercent,
   Users,
 } from 'lucide-react';
-import { db } from '@shared/index';
-import { UserRole } from '@shared/types';
+import { Book, UserRole } from '@shared/types';
 import { adminStatsService } from '@/services/adminStatsService';
 import { StaffAccount, adminAuthService } from '@/services/adminAuthService';
 
@@ -139,13 +138,37 @@ export const AdminLayout: React.FC = () => {
     };
   }, []);
 
-  const lowStockBooks = db.books.filter(
-    (b) => b.stock < db.storeConfig.lowStockThreshold
-  );
-  const pendingReturns = db.orders.filter(
-    (o) => o.returnRequest?.status === 'PENDING'
-  );
-  const alertCount = lowStockBooks.length + pendingReturns.length;
+  // Cảnh báo vận hành thật từ Backend (/api/admin/dashboard) cho chuông thông báo & thanh bên
+  const [lowStockBooks, setLowStockBooks] = useState<Book[]>([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [pendingReturnsCount, setPendingReturnsCount] = useState(0);
+
+  useEffect(() => {
+    if (!currentStaff) {
+      setLowStockBooks([]);
+      setPendingReturnsCount(0);
+      return;
+    }
+    let active = true;
+    adminStatsService
+      .getDashboardStats()
+      .then((res) => {
+        if (!active) return;
+        setLowStockBooks(res.lowStockBooks);
+        setLowStockThreshold(res.lowStockThreshold);
+        setPendingReturnsCount(res.stats.pendingReturnsCount);
+      })
+      .catch(() => {
+        // Không làm gián đoạn giao diện nếu chuông cảnh báo chưa tải được
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentStaff?.id, location.pathname]);
+
+  const alertCount =
+    (currentStaff?.role === 'CSKH' ? 0 : lowStockBooks.length) +
+    (currentStaff?.role === 'WAREHOUSE_MANAGER' ? 0 : pendingReturnsCount);
 
   // Xử lý submit form đăng nhập: validate sơ bộ ở client rồi gọi POST /api/admin/auth/login để Backend xác thực + check vai trò
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -460,8 +483,8 @@ export const AdminLayout: React.FC = () => {
                   <span>Cảnh báo tồn kho ({lowStockBooks.length})</span>
                 </div>
                 <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                  Có {lowStockBooks.length} đầu sách dưới định mức{' '}
-                  {db.storeConfig.lowStockThreshold} cuốn cần nhập bổ sung.
+                  Có {lowStockBooks.length} đầu sách dưới/bằng định mức{' '}
+                  {lowStockThreshold} cuốn cần nhập bổ sung.
                 </p>
                 <button
                   type="button"
@@ -533,26 +556,26 @@ export const AdminLayout: React.FC = () => {
                   <div className="text-xs font-bold text-slate-900 pb-2 border-b border-slate-100">
                     Cảnh báo Vận hành & Kho ({alertCount})
                   </div>
-                  {lowStockBooks.map((b) => (
-                    <div
-                      key={b.id}
-                      onClick={() => {
-                        setNotifOpen(false);
-                        navigate('/inventory');
-                      }}
-                      className="p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"
-                    >
-                      <div className="font-semibold text-amber-700">
-                        ⚠️ Sắp hết hàng: {b.title}
+                  {currentStaff.role !== 'CSKH' &&
+                    lowStockBooks.slice(0, 5).map((b) => (
+                      <div
+                        key={b.id}
+                        onClick={() => {
+                          setNotifOpen(false);
+                          navigate('/inventory');
+                        }}
+                        className="p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"
+                      >
+                        <div className="font-semibold text-amber-700">
+                          ⚠️ Sắp hết hàng: {b.title}
+                        </div>
+                        <div className="text-slate-500">
+                          Tồn kho thực tế chỉ còn {b.stock} cuốn
+                        </div>
                       </div>
-                      <div className="text-slate-500">
-                        Tồn kho thực tế chỉ còn {b.stock} cuốn
-                      </div>
-                    </div>
-                  ))}
-                  {pendingReturns.map((o) => (
+                    ))}
+                  {currentStaff.role !== 'WAREHOUSE_MANAGER' && pendingReturnsCount > 0 && (
                     <div
-                      key={o.id}
                       onClick={() => {
                         setNotifOpen(false);
                         navigate('/orders');
@@ -560,13 +583,18 @@ export const AdminLayout: React.FC = () => {
                       className="p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-xs"
                     >
                       <div className="font-semibold text-rose-700">
-                        🔄 Yêu cầu đổi trả mới: Đơn {o.orderCode}
+                        🔄 Có {pendingReturnsCount} yêu cầu đổi trả đang chờ duyệt
                       </div>
                       <div className="text-slate-500">
-                        Khách hàng: {o.customerName}
+                        Bấm để mở trang Đơn hàng & Đổi trả
                       </div>
                     </div>
-                  ))}
+                  )}
+                  {alertCount === 0 && (
+                    <div className="p-2 text-xs text-slate-500">
+                      Hiện chưa có cảnh báo vận hành mới.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

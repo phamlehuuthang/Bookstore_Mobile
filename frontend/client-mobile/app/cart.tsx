@@ -19,6 +19,7 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { EmptyStateView } from '@/components/common/StateViews';
+import { evaluateVoucher } from '@/utils/voucherEligibility';
 
 export default function CartScreen() {
   const router = useRouter();
@@ -253,19 +254,75 @@ export default function CartScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, marginTop: 4 }}
             >
-              {activeVouchers.map((v) => (
-                <Pressable
-                  key={v.id}
-                  onPress={() => {
-                    setVoucherInput(v.code);
-                    void applyVoucherCode(v.code);
-                  }}
-                  style={styles.quickVoucherChip}
-                >
-                  <Text style={styles.quickVoucherCode}>{v.code}</Text>
-                  <Text style={styles.quickVoucherDesc}>{v.title}</Text>
-                </Pressable>
-              ))}
+              {activeVouchers
+                .map((v) => ({
+                  voucher: v,
+                  evalInfo: evaluateVoucher(v, selectedItems, subtotal),
+                }))
+                .sort((a, b) =>
+                  a.evalInfo.isEligible === b.evalInfo.isEligible
+                    ? b.evalInfo.estimatedSaving - a.evalInfo.estimatedSaving
+                    : a.evalInfo.isEligible
+                      ? -1
+                      : 1
+                )
+                .map(({ voucher: v, evalInfo }) => {
+                  const isApplied = appliedVoucher?.code === v.code && discountAmount > 0;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      disabled={!evalInfo.isEligible && !isApplied}
+                      onPress={() => {
+                        if (isApplied) {
+                          clearVoucher();
+                          return;
+                        }
+                        setVoucherInput(v.code);
+                        void applyVoucherCode(v.code);
+                      }}
+                      style={[
+                        styles.quickVoucherChip,
+                        isApplied && { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+                        !evalInfo.isEligible && !isApplied && { opacity: 0.6 },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <Text style={styles.quickVoucherCode}>{v.code}</Text>
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: '700',
+                            color: isApplied
+                              ? colors.primary
+                              : evalInfo.isEligible
+                                ? colors.accent
+                                : colors.textMuted,
+                          }}
+                        >
+                          {isApplied ? 'Đang dùng' : evalInfo.isEligible ? 'Dùng ngay' : 'Chưa đủ ĐK'}
+                        </Text>
+                      </View>
+                      <Text style={styles.quickVoucherDesc} numberOfLines={1}>
+                        {v.title}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: colors.textMuted }} numberOfLines={1}>
+                        {evalInfo.minOrderLabel} • {evalInfo.scopeLabel}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: '700',
+                          color: evalInfo.isEligible ? colors.primary : colors.accent,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {evalInfo.isEligible
+                          ? `Tiết kiệm ${formatCurrencyVND(evalInfo.estimatedSaving)}`
+                          : evalInfo.missingReason}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
             </ScrollView>
           </View>
 

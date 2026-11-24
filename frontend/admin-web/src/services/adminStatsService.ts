@@ -1,59 +1,144 @@
-import { db } from '@shared/index';
-import { Book, DashboardStats, formatCurrencyVND } from '@shared/types';
+import { Book, DashboardStats } from '@shared/types';
+import { ADMIN_API_BASE_URL, getAdminToken } from './adminAuthService';
+import { adminRequest } from './adminHttpClient';
 
+interface BackendDashboardBookItemDto {
+  id: string;
+  maIsbn: string;
+  tieuDe: string;
+  tenTacGia: string;
+  tenDanhMuc: string;
+  tenNhaXuatBan: string;
+  anhBiaUrl: string;
+  giaBan: number;
+  giaGoc: number;
+  dangFlashSale: boolean;
+  giaFlashSale: number | null;
+  tonKho: number;
+  daBan: number;
+}
+
+interface BackendRevenuePointDto {
+  label: string;
+  revenue: number;
+  orders: number;
+  profit: number;
+}
+
+interface BackendAdminDashboardDto {
+  totalRevenue: number | null;
+  revenueGrowth: number | null;
+  totalOrders: number;
+  ordersGrowth: number;
+  newCustomers: number;
+  customersGrowth: number;
+  pendingOrdersCount: number;
+  pendingReturnsCount: number;
+  lowStockCount: number;
+  lowStockThreshold: number;
+  revenueByDay: BackendRevenuePointDto[] | null;
+  revenueByMonth: BackendRevenuePointDto[] | null;
+  revenueByYear: BackendRevenuePointDto[] | null;
+  topSellingBooks: BackendDashboardBookItemDto[];
+  lowStockBooks: BackendDashboardBookItemDto[];
+}
+
+function mapDashboardBook(dto: BackendDashboardBookItemDto): Book {
+  const isFlash =
+    Boolean(dto.dangFlashSale) && dto.giaFlashSale != null && Number(dto.giaFlashSale) > 0;
+  return {
+    id: dto.id,
+    isbn: dto.maIsbn,
+    title: dto.tieuDe,
+    slug: dto.id,
+    authorId: '',
+    authorName: dto.tenTacGia,
+    publisherId: '',
+    publisherName: dto.tenNhaXuatBan,
+    categoryId: '',
+    categoryName: dto.tenDanhMuc,
+    price: Number(dto.giaBan ?? 0),
+    originalPrice: Number(dto.giaGoc ?? 0),
+    stock: Number(dto.tonKho ?? 0),
+    soldCount: Number(dto.daBan ?? 0),
+    ratingAvg: 5,
+    ratingCount: 0,
+    pageCount: 0,
+    publishYear: 0,
+    coverFormat: 'Bìa mềm',
+    coverUrl: dto.anhBiaUrl,
+    galleryUrls: dto.anhBiaUrl ? [dto.anhBiaUrl] : [],
+    shortSummary: '',
+    description: '',
+    isFlashSale: isFlash,
+    flashSalePrice: isFlash ? Number(dto.giaFlashSale) : undefined,
+    isBestSeller: false,
+    isVisible: true,
+    createdAt: '',
+  };
+}
+
+/**
+ * Service Thống kê Dashboard (theo RBAC) & Xuất Báo cáo Doanh thu CSV thật từ Backend (Bước 8).
+ */
 export const adminStatsService = {
   async getDashboardStats(): Promise<{
     stats: DashboardStats;
+    canViewFinance: boolean;
+    lowStockThreshold: number;
     topSellingBooks: Book[];
     lowStockBooks: Book[];
   }> {
-    const lowStockBooks = db.books.filter(
-      (b) => b.stock < db.storeConfig.lowStockThreshold
-    );
-    const pendingOrdersCount = db.orders.filter((o) => o.status === 'PENDING').length;
-    const pendingReturnsCount = db.orders.filter(
-      (o) => o.returnRequest?.status === 'PENDING'
-    ).length;
-
-    const topSellingBooks = [...db.books]
-      .sort((a, b) => b.soldCount - a.soldCount)
-      .slice(0, 5);
+    const dto = await adminRequest<BackendAdminDashboardDto>('/api/admin/dashboard');
+    const canViewFinance = dto.totalRevenue != null && dto.revenueByMonth != null;
 
     return {
+      canViewFinance,
+      lowStockThreshold: Number(dto.lowStockThreshold ?? 5),
       stats: {
-        ...db.stats,
-        lowStockCount: lowStockBooks.length,
-        pendingOrdersCount,
-        pendingReturnsCount,
+        totalRevenue: Number(dto.totalRevenue ?? 0),
+        revenueGrowth: Number(dto.revenueGrowth ?? 0),
+        totalOrders: Number(dto.totalOrders ?? 0),
+        ordersGrowth: Number(dto.ordersGrowth ?? 0),
+        newCustomers: Number(dto.newCustomers ?? 0),
+        customersGrowth: Number(dto.customersGrowth ?? 0),
+        lowStockCount: Number(dto.lowStockCount ?? 0),
+        pendingOrdersCount: Number(dto.pendingOrdersCount ?? 0),
+        pendingReturnsCount: Number(dto.pendingReturnsCount ?? 0),
+        revenueByDay: (dto.revenueByDay || []).map((p) => ({
+          label: p.label,
+          revenue: Number(p.revenue ?? 0),
+          orders: Number(p.orders ?? 0),
+          profit: Number(p.profit ?? 0),
+        })),
+        revenueByMonth: (dto.revenueByMonth || []).map((p) => ({
+          label: p.label,
+          revenue: Number(p.revenue ?? 0),
+          orders: Number(p.orders ?? 0),
+          profit: Number(p.profit ?? 0),
+        })),
+        revenueByYear: (dto.revenueByYear || []).map((p) => ({
+          label: p.label,
+          revenue: Number(p.revenue ?? 0),
+          orders: Number(p.orders ?? 0),
+          profit: Number(p.profit ?? 0),
+        })),
       },
-      topSellingBooks,
-      lowStockBooks,
+      topSellingBooks: (dto.topSellingBooks || []).map(mapDashboardBook),
+      lowStockBooks: (dto.lowStockBooks || []).map(mapDashboardBook),
     };
   },
 
-  exportRevenueExcelCsv(): void {
-    const rows = [
-      ['Kỳ báo cáo', 'Doanh thu (VND)', 'Số đơn hàng', 'Lợi nhuận gộp (VND)'],
-      ...db.stats.revenueByMonth.map((r) => [
-        r.label,
-        r.revenue.toString(),
-        r.orders.toString(),
-        r.profit.toString(),
-      ]),
-      [],
-      ['Top Sách Bán Chạy', 'Mã ISBN', 'Giá bán', 'Đã bán', 'Tồn kho'],
-      ...db.books.map((b) => [
-        `"${b.title}"`,
-        b.isbn,
-        formatCurrencyVND(b.flashSalePrice ?? b.price),
-        b.soldCount.toString(),
-        b.stock.toString(),
-      ]),
-    ];
-
-    const csvContent =
-      '\uFEFF' + rows.map((row) => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  async exportRevenueExcelCsv(): Promise<void> {
+    const token = getAdminToken();
+    const res = await fetch(`${ADMIN_API_BASE_URL}/api/admin/reports/revenue-export`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      throw new Error(`Không thể xuất báo cáo doanh thu (HTTP ${res.status}).`);
+    }
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -67,4 +152,3 @@ export const adminStatsService = {
     URL.revokeObjectURL(url);
   },
 };
-

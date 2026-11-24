@@ -2,7 +2,6 @@ import { db } from '@shared/index';
 import {
   DiscountType,
   InventoryReceipt,
-  InventoryReceiptItem,
   Review,
   StoreConfig,
   User,
@@ -90,45 +89,104 @@ function mapBackendUser(dto: BackendUserDto): User {
 }
 
 export const adminSystemService = {
-  // 1. INVENTORY & IMPORT RECEIPTS
+  // 1. INVENTORY & IMPORT RECEIPTS (Bước 8 - Khối A: kết nối Backend thật)
   async getInventoryReceipts(): Promise<InventoryReceipt[]> {
-    return [...db.inventoryReceipts];
+    const rows = await adminRequest<
+      Array<{
+        id: string;
+        maPhieu: string;
+        tenNhaCungCap: string;
+        nguoiTao: string;
+        ghiChu: string | null;
+        tongSoLuong: number;
+        tongTienNhap: number;
+        ngayTao: string;
+        items: Array<{
+          id: string;
+          sachId: string;
+          tieuDeSach: string;
+          maIsbn: string;
+          soLuong: number;
+          giaNhap: number;
+        }>;
+      }>
+    >('/api/admin/inventory/receipts');
+
+    return rows.map((r) => ({
+      id: r.id,
+      receiptCode: r.maPhieu,
+      supplierName: r.tenNhaCungCap,
+      createdBy: r.nguoiTao,
+      note: r.ghiChu || '',
+      totalQuantity: Number(r.tongSoLuong ?? 0),
+      totalCost: Number(r.tongTienNhap ?? 0),
+      createdAt: r.ngayTao,
+      items: (r.items || []).map((i) => ({
+        bookId: i.sachId,
+        bookTitle: i.tieuDeSach,
+        isbn: i.maIsbn,
+        quantity: Number(i.soLuong ?? 0),
+        importPrice: Number(i.giaNhap ?? 0),
+      })),
+    }));
   },
 
   async createInventoryReceipt(payload: {
     supplierName: string;
-    createdBy: string;
-    note: string;
-    items: InventoryReceiptItem[];
+    note?: string;
+    items: Array<{
+      bookId: string;
+      quantity: number;
+      importPrice: number;
+    }>;
   }): Promise<InventoryReceipt> {
-    const totalQuantity = payload.items.reduce((acc, i) => acc + i.quantity, 0);
-    const totalCost = payload.items.reduce(
-      (acc, i) => acc + i.quantity * i.importPrice,
-      0
-    );
-
-    const receipt: InventoryReceipt = {
-      id: `inv-${Date.now()}`,
-      receiptCode: `PNK-202611-${String(db.inventoryReceipts.length + 1).padStart(2, '0')}`,
-      supplierName: payload.supplierName,
-      createdBy: payload.createdBy,
-      note: payload.note,
-      items: payload.items,
-      totalQuantity,
-      totalCost,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Increment real book stock in DB
-    payload.items.forEach((item) => {
-      const book = db.books.find((b) => b.id === item.bookId);
-      if (book) {
-        book.stock += item.quantity;
-      }
+    const saved = await adminRequest<{
+      id: string;
+      maPhieu: string;
+      tenNhaCungCap: string;
+      nguoiTao: string;
+      ghiChu: string | null;
+      tongSoLuong: number;
+      tongTienNhap: number;
+      ngayTao: string;
+      items: Array<{
+        id: string;
+        sachId: string;
+        tieuDeSach: string;
+        maIsbn: string;
+        soLuong: number;
+        giaNhap: number;
+      }>;
+    }>('/api/admin/inventory/receipts', {
+      method: 'POST',
+      body: JSON.stringify({
+        tenNhaCungCap: payload.supplierName.trim(),
+        ghiChu: payload.note?.trim() || undefined,
+        items: payload.items.map((i) => ({
+          sachId: i.bookId,
+          soLuong: Number(i.quantity),
+          giaNhap: Number(i.importPrice),
+        })),
+      }),
     });
 
-    db.inventoryReceipts.unshift(receipt);
-    return receipt;
+    return {
+      id: saved.id,
+      receiptCode: saved.maPhieu,
+      supplierName: saved.tenNhaCungCap,
+      createdBy: saved.nguoiTao,
+      note: saved.ghiChu || '',
+      totalQuantity: Number(saved.tongSoLuong ?? 0),
+      totalCost: Number(saved.tongTienNhap ?? 0),
+      createdAt: saved.ngayTao,
+      items: (saved.items || []).map((i) => ({
+        bookId: i.sachId,
+        bookTitle: i.tieuDeSach,
+        isbn: i.maIsbn,
+        quantity: Number(i.soLuong ?? 0),
+        importPrice: Number(i.giaNhap ?? 0),
+      })),
+    };
   },
 
   // 2. CUSTOMERS & STAFF RBAC (Bước 2 - Phần 3: kết nối Backend thật)

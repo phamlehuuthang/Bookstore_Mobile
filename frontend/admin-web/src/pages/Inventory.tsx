@@ -1,60 +1,92 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, FilePlus2, PackagePlus } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, FilePlus2, PackagePlus } from 'lucide-react';
 import { Book, InventoryReceipt, formatCurrencyVND } from '@shared/types';
 import { adminBookService } from '@/services/adminBookService';
 import { adminSystemService } from '@/services/adminSystemService';
 import { ColumnDef, DataTable } from '@/components/DataTable';
 
+const LOW_STOCK_THRESHOLD = 5;
+
 export const Inventory: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [receipts, setReceipts] = useState<InventoryReceipt[]>([]);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Import Receipt Form
   const [showImportModal, setShowImportModal] = useState(false);
-  const [selectedBookId, setSelectedBookId] = useState('book-5');
+  const [selectedBookId, setSelectedBookId] = useState('');
   const [importQty, setImportQty] = useState(25);
   const [importPrice, setImportPrice] = useState(65000);
-  const [supplierName, setSupplierName] = useState('Nhà Phát Hành FAHASA TP.HCM');
-  const [note, setNote] = useState('Nhập bổ sung sách dưới định mức tồn kho an toàn');
+  const [supplierName, setSupplierName] = useState('Công ty Phát hành Sách Fahasa');
+  const [note, setNote] = useState('Nhập bổ sung sách tồn kho');
 
-  const loadData = async () => {
-    const [bList, rList] = await Promise.all([
-      adminBookService.getAllBooks(),
-      adminSystemService.getInventoryReceipts(),
-    ]);
-    setBooks(bList);
-    setReceipts(rList);
-  };
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const [bList, rList] = await Promise.all([
+        adminBookService.getAllBooks(),
+        adminSystemService.getInventoryReceipts(),
+      ]);
+      setBooks(bList);
+      setReceipts(rList);
+      setSelectedBookId((prev) => prev || bList[0]?.id || '');
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể tải dữ liệu tồn kho và phiếu nhập.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  const lowStockBooks = books.filter((b) => b.stock < 5);
+  const lowStockBooks = books.filter((b) => b.stock <= LOW_STOCK_THRESHOLD);
   const displayedBooks = onlyLowStock ? lowStockBooks : books;
 
   const handleCreateReceipt = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     const targetBook = books.find((b) => b.id === selectedBookId);
-    if (!targetBook) return;
+    if (!targetBook) {
+      setErrorMsg('Vui lòng chọn đầu sách cần nhập kho.');
+      return;
+    }
 
-    await adminSystemService.createInventoryReceipt({
-      supplierName,
-      createdBy: 'Đỗ Thanh Tùng (Quản Lý Kho)',
-      note,
-      items: [
-        {
-          bookId: targetBook.id,
-          bookTitle: targetBook.title,
-          isbn: targetBook.isbn,
-          quantity: Number(importQty),
-          importPrice: Number(importPrice),
-        },
-      ],
-    });
-    setShowImportModal(false);
-    await loadData();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsSubmitting(true);
+    try {
+      const created = await adminSystemService.createInventoryReceipt({
+        supplierName,
+        note,
+        items: [
+          {
+            bookId: targetBook.id,
+            quantity: Number(importQty),
+            importPrice: Number(importPrice),
+          },
+        ],
+      });
+      setShowImportModal(false);
+      setSuccessMsg(
+        `Đã lập phiếu ${created.receiptCode} (+${created.totalQuantity} cuốn cho "${targetBook.title}") và cập nhật tồn kho thành công!`
+      );
+      await loadData();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể lập phiếu nhập kho lúc này.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const stockColumns: ColumnDef<Book>[] = [
@@ -83,12 +115,12 @@ export const Inventory: React.FC = () => {
       render: (b) => (
         <span
           className={`px-3 py-1 rounded-full text-xs font-bold ${
-            b.stock < 5
+            b.stock <= LOW_STOCK_THRESHOLD
               ? 'bg-rose-100 text-rose-700 border border-rose-300'
               : 'bg-emerald-50 text-emerald-700'
           }`}
         >
-          {b.stock} cuốn {b.stock < 5 ? '• CẢNH BÁO SẮP HẾT' : '• An toàn'}
+          {b.stock} cuốn {b.stock <= LOW_STOCK_THRESHOLD ? '• CẢNH BÁO SẮP HẾT' : '• An toàn'}
         </span>
       ),
     },
@@ -120,7 +152,7 @@ export const Inventory: React.FC = () => {
             Quản lý Tồn Kho & Phiếu Nhập Kho
           </h1>
           <p className="text-sm text-slate-500">
-            Giám sát định mức tồn kho tự động (&lt; 5 cuốn) và lập chứng từ nhập hàng
+            Giám sát định mức tồn kho tự động (&le; 5 cuốn) và lập chứng từ nhập hàng
           </p>
         </div>
         <button
@@ -133,6 +165,20 @@ export const Inventory: React.FC = () => {
         </button>
       </div>
 
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
       {/* AUTOMATED LOW STOCK WARNING BANNER */}
       {lowStockBooks.length > 0 && (
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -142,7 +188,7 @@ export const Inventory: React.FC = () => {
             </div>
             <div>
               <div className="text-sm font-bold text-amber-900">
-                Cảnh báo tự động: Phát hiện {lowStockBooks.length} đầu sách sắp hết hàng (&lt; 5 cuốn)!
+                Cảnh báo tự động: Phát hiện {lowStockBooks.length} đầu sách sắp hết hàng (&le; 5 cuốn)!
               </div>
               <div className="text-xs text-amber-800">
                 Các đầu sách: {lowStockBooks.map((b) => `${b.title} (còn ${b.stock})`).join(' • ')}
@@ -154,7 +200,7 @@ export const Inventory: React.FC = () => {
             onClick={() => setOnlyLowStock(!onlyLowStock)}
             className="px-3.5 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold shrink-0 cursor-pointer"
           >
-            {onlyLowStock ? 'Hiển thị toàn bộ kho' : 'Chỉ lọc sách sắp hết (< 5)'}
+            {onlyLowStock ? 'Hiển thị toàn bộ kho' : 'Chỉ lọc sách sắp hết (≤ 5)'}
           </button>
         </div>
       )}
@@ -163,6 +209,9 @@ export const Inventory: React.FC = () => {
         columns={stockColumns}
         data={displayedBooks}
         rowKey={(b) => b.id}
+        isLoading={isLoading}
+        error={errorMsg}
+        onRetry={loadData}
       />
 
       {/* LỊCH SỬ PHIẾU NHẬP KHO */}

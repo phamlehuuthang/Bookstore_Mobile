@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.trithucviet.bookstore.config.JwtTokenProvider;
 import com.trithucviet.bookstore.entity.enums.VaiTro;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,9 @@ class WishlistApiTests {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private MockMvc mockMvc;
     private String customerToken;
 
@@ -46,6 +50,14 @@ class WishlistApiTests {
         // Kích hoạt chuỗi Filter của Spring Security cho MockMvc để test được cả 401/403
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         customerToken = bearer("nd_kh01", "thang.nguyen@gmail.com", VaiTro.CUSTOMER);
+
+        // Cô lập dữ liệu tủ sách yêu thích của nd_kh01 trước mỗi test để không phụ thuộc thao tác demo trên giao diện
+        entityManager.createNativeQuery("DELETE FROM sach_yeu_thich WHERE nguoi_dung_id = 'nd_kh01'").executeUpdate();
+        entityManager.createNativeQuery(
+                "INSERT INTO sach_yeu_thich (nguoi_dung_id, sach_id) VALUES ('nd_kh01', 'sach_001'), ('nd_kh01', 'sach_016')"
+        ).executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
     }
 
     // Sinh chuỗi Authorization header hợp lệ bằng chính JwtTokenProvider của dự án (thay cho API Login khi Người A chưa xong Bước 2)
