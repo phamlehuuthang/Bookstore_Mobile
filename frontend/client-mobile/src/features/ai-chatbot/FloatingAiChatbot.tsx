@@ -18,9 +18,150 @@ import { colors } from '@/theme/colors';
 import { useAiChat } from '@/hooks/useAiChat';
 import { useCart } from '@/hooks/useCart';
 
+/**
+ * Hiển thị nội dung tin nhắn AI sạch đẹp, dễ đọc trên React Native:
+ * - Tự động chuyển **in đậm**, *in nghiêng*, `mã code` thành style thật (không còn ký tự ** hay * thô).
+ * - Tách danh sách gạch đầu dòng (•, -, 1.) thành từng hàng căn lề rõ ràng, thoáng mắt.
+ * - Ẩn tag kỹ thuật [ID: sach_xxx] khỏi mắt người đọc.
+ */
+function renderInlineSegments(rawLine: string, isUser: boolean) {
+  const cleaned = rawLine.replace(/\s*\[ID:\s*sach_\w+\]/gi, '');
+  const tokenRegex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
+  const parts = cleaned.split(tokenRegex);
+
+  return parts.map((part, idx) => {
+    if (!part) return null;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <Text
+          key={idx}
+          style={[
+            styles.inlineBold,
+            isUser ? { color: '#FFFFFF' } : { color: colors.textPrimary },
+          ]}
+        >
+          {part.slice(2, -2)}
+        </Text>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <Text
+          key={idx}
+          style={isUser ? styles.inlineCodeUser : styles.inlineCodeAi}
+        >
+          {part.slice(1, -1)}
+        </Text>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return (
+        <Text
+          key={idx}
+          style={[
+            styles.inlineItalic,
+            isUser ? { color: 'rgba(255,255,255,0.9)' } : { color: colors.textSecondary },
+          ]}
+        >
+          {part.slice(1, -1)}
+        </Text>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+function FormattedChatText({ text, isUser }: { text: string; isUser: boolean }) {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trimEnd());
+
+  return (
+    <View style={styles.formattedContainer}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <View key={idx} style={{ height: 4 }} />;
+        }
+        if (/^-{3,}$/.test(trimmed)) {
+          return <View key={idx} style={styles.msgDivider} />;
+        }
+
+        const headingMatch = trimmed.match(/^#{1,3}\s+(.+)$/);
+        if (headingMatch) {
+          return (
+            <Text
+              key={idx}
+              selectable
+              style={[styles.msgHeading, isUser && { color: '#FFFFFF' }]}
+            >
+              {renderInlineSegments(headingMatch[1], isUser)}
+            </Text>
+          );
+        }
+
+        const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+        if (numberedMatch && !isUser) {
+          return (
+            <View key={idx} style={styles.listItemRow}>
+              <View style={styles.numberBadge}>
+                <Text style={styles.numberBadgeText}>{numberedMatch[1]}</Text>
+              </View>
+              <Text selectable style={[styles.msgText, styles.msgTextAi, { flex: 1 }]}>
+                {renderInlineSegments(numberedMatch[2], false)}
+              </Text>
+            </View>
+          );
+        }
+
+        const bulletMatch = trimmed.match(/^(?:[•\-*]|\+)\s+(.+)$/);
+        if (bulletMatch) {
+          const isSubBullet = /^\s{2,}/.test(line);
+          return (
+            <View
+              key={idx}
+              style={[styles.listItemRow, isSubBullet && { paddingLeft: 14 }]}
+            >
+              <Text
+                style={[
+                  styles.bulletDot,
+                  isUser ? { color: '#FFFFFF' } : { color: colors.primary },
+                ]}
+              >
+                {isSubBullet ? '◦' : '•'}
+              </Text>
+              <Text
+                selectable
+                style={[
+                  styles.msgText,
+                  isUser ? styles.msgTextUser : styles.msgTextAi,
+                  { flex: 1 },
+                ]}
+              >
+                {renderInlineSegments(bulletMatch[1], isUser)}
+              </Text>
+            </View>
+          );
+        }
+
+        return (
+          <Text
+            key={idx}
+            selectable
+            style={[styles.msgText, isUser ? styles.msgTextUser : styles.msgTextAi]}
+          >
+            {renderInlineSegments(trimmed, isUser)}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
 export function FloatingAiChatbot() {
   const router = useRouter();
-  const { isOpen, isTyping, messages, quickChips, openChat, minimizeChat, sendMessage } =
+  const { isOpen, isTyping, messages, quickChips, openChat, minimizeChat, resetChat, sendMessage } =
     useAiChat();
   const { addToCart } = useCart();
   const [inputText, setInputText] = useState('');
@@ -34,7 +175,7 @@ export function FloatingAiChatbot() {
 
   return (
     <>
-      {/* FLOATING ACTION BUTTON (FAB) - Fixed bottom right, zIndex: 999, above TabBar */}
+      {/* FLOATING ACTION BUTTON (FAB) */}
       <View pointerEvents="box-none" style={styles.fabContainer}>
         <Pressable
           onPress={openChat}
@@ -42,13 +183,13 @@ export function FloatingAiChatbot() {
             styles.fabButton,
             pressed && { transform: [{ scale: 0.94 }], opacity: 0.92 },
           ]}
-          accessibilityLabel="Mở hộp thoại Tư vấn Sách"
+          accessibilityLabel="Mở hộp thoại Trợ lý AI"
         >
           <View style={styles.sparkleBadge}>
-            <Ionicons name="chatbubbles" size={11} color="#FEF3C7" />
+            <Ionicons name="sparkles" size={11} color="#FEF3C7" />
           </View>
           <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
-          <Text style={styles.fabLabel}>Tư vấn</Text>
+          <Text style={styles.fabLabel}>Trợ lý AI</Text>
         </Pressable>
       </View>
 
@@ -66,40 +207,39 @@ export function FloatingAiChatbot() {
           <Pressable style={styles.backdropDismiss} onPress={minimizeChat} />
 
           <View style={styles.sheetContainer}>
-            {/* Grabber Handle */}
             <View style={styles.grabberRow}>
               <View style={styles.grabberBar} />
             </View>
 
-            {/* Sheet Header with Minimize & Close preserving chat history */}
+            {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerLeft}>
                 <View style={styles.aiAvatar}>
-                  <Ionicons name="headset" size={18} color="#FFFFFF" />
+                  <Ionicons name="sparkles" size={18} color="#FFFFFF" />
                 </View>
                 <View>
-                  <Text style={styles.headerTitle}>Tư vấn viên Tri Thức Việt</Text>
+                  <Text style={styles.headerTitle}>Trợ lý AI Tri Thức Việt</Text>
                   <View style={styles.onlineRow}>
                     <View style={styles.onlineDot} />
-                    <Text style={styles.onlineText}>Hỗ trợ chọn sách & giải đáp 24/7</Text>
+                    <Text style={styles.onlineText}>Tự đặt sách • Săn mã • Tư vấn 24/7</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.headerActions}>
                 <Pressable
-                  onPress={minimizeChat}
+                  onPress={resetChat}
                   hitSlop={8}
                   style={styles.headerIconBtn}
-                  accessibilityLabel="Thu nhỏ cửa sổ chat"
+                  accessibilityLabel="Làm mới đoạn hội thoại"
                 >
-                  <Ionicons name="remove-outline" size={22} color={colors.textPrimary} />
+                  <Ionicons name="refresh-outline" size={19} color={colors.textPrimary} />
                 </Pressable>
                 <Pressable
                   onPress={minimizeChat}
                   hitSlop={8}
                   style={styles.headerIconBtn}
-                  accessibilityLabel="Đóng cửa sổ chat"
+                  accessibilityLabel="Thu nhỏ cửa sổ chat"
                 >
                   <Ionicons name="close" size={20} color={colors.textPrimary} />
                 </Pressable>
@@ -128,17 +268,33 @@ export function FloatingAiChatbot() {
                         isUser ? styles.msgBubbleUser : styles.msgBubbleAi,
                       ]}
                     >
-                      <Text
-                        selectable
-                        style={[
-                          styles.msgText,
-                          isUser ? styles.msgTextUser : styles.msgTextAi,
-                        ]}
-                      >
-                        {msg.text}
-                      </Text>
+                      <FormattedChatText text={msg.text} isUser={isUser} />
 
-                      {/* Suggested Books inside consultant response */}
+                      {/* Thẻ biên lai đơn hàng vừa được AI tự động tạo thành công */}
+                      {msg.createdOrderCode ? (
+                        <View style={styles.orderReceiptCard}>
+                          <View style={styles.orderReceiptHeader}>
+                            <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                            <Text style={styles.orderReceiptTitle}>
+                              Đơn hàng {msg.createdOrderCode} đã tạo!
+                            </Text>
+                          </View>
+                          <Text style={styles.orderReceiptSub}>
+                            Đã tự động áp mã ưu đãi tốt nhất • Thanh toán COD
+                          </Text>
+                          <Pressable
+                            onPress={() => {
+                              minimizeChat();
+                              router.push('/orders');
+                            }}
+                            style={styles.viewOrderBtn}
+                          >
+                            <Text style={styles.viewOrderBtnText}>Xem hành trình đơn hàng →</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+
+                      {/* Suggested Books inside AI response */}
                       {msg.suggestedBooks && msg.suggestedBooks.length > 0 ? (
                         <View style={styles.suggestedList}>
                           {msg.suggestedBooks.map((book) => (
@@ -151,9 +307,16 @@ export function FloatingAiChatbot() {
                                 <Text style={styles.suggestedTitle} numberOfLines={2}>
                                   {book.title}
                                 </Text>
-                                <Text style={styles.suggestedPrice}>
-                                  {formatCurrencyVND(book.flashSalePrice ?? book.price)}
-                                </Text>
+                                <View style={styles.priceBadgeRow}>
+                                  <Text style={styles.suggestedPrice}>
+                                    {formatCurrencyVND(book.flashSalePrice ?? book.price)}
+                                  </Text>
+                                  {book.isFlashSale ? (
+                                    <View style={styles.flashTag}>
+                                      <Text style={styles.flashTagText}>FLASH SALE</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
                                 <View style={styles.suggestedBtnRow}>
                                   <Pressable
                                     onPress={() => {
@@ -168,8 +331,20 @@ export function FloatingAiChatbot() {
                                     onPress={() => addToCart(book, 1)}
                                     style={styles.quickAddBtn}
                                   >
-                                    <Ionicons name="cart-outline" size={14} color="#FFFFFF" />
+                                    <Ionicons name="cart-outline" size={13} color="#FFFFFF" />
                                     <Text style={styles.quickAddBtnText}>Thêm giỏ</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() =>
+                                      sendMessage(
+                                        `⚡ Đặt ngay 1 cuốn ${book.title} [ID: ${book.id}]`
+                                      )
+                                    }
+                                    disabled={isTyping}
+                                    style={styles.quickOrderBtn}
+                                  >
+                                    <Ionicons name="flash" size={12} color="#FFFFFF" />
+                                    <Text style={styles.quickOrderBtnText}>Đặt ngay</Text>
                                   </Pressable>
                                 </View>
                               </View>
@@ -195,14 +370,14 @@ export function FloatingAiChatbot() {
                 <View style={[styles.msgRow, styles.msgRowAi]}>
                   <View style={[styles.msgBubble, styles.msgBubbleAi]}>
                     <Text style={styles.typingText}>
-                      Đang tìm kiếm thông tin sách phù hợp...
+                      Trợ lý AI đang xử lý yêu cầu của bạn...
                     </Text>
                   </View>
                 </View>
               ) : null}
             </ScrollView>
 
-            {/* PROMPT QUICK CHIPS */}
+            {/* DYNAMIC PROMPT QUICK CHIPS */}
             <View style={styles.chipsSection}>
               <ScrollView
                 horizontal
@@ -214,12 +389,15 @@ export function FloatingAiChatbot() {
                   <Pressable
                     key={chip}
                     onPress={() => sendMessage(chip)}
+                    disabled={isTyping}
                     style={({ pressed }) => [
                       styles.chipBtn,
                       pressed && { backgroundColor: colors.primarySoft, opacity: 0.85 },
                     ]}
                   >
-                    <Text style={styles.chipText}>{chip}</Text>
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      {chip}
+                    </Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -230,7 +408,7 @@ export function FloatingAiChatbot() {
               <TextInput
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder="Nhập câu hỏi hoặc tên sách cần tư vấn..."
+                placeholder="VD: Đặt cuốn Dế Mèn Phiêu Lưu Ký, Sách hợp gu..."
                 placeholderTextColor={colors.textMuted}
                 style={styles.textInput}
                 onSubmitEditing={handleSend}
@@ -259,7 +437,7 @@ const styles = StyleSheet.create({
   fabContainer: {
     position: 'absolute',
     right: 16,
-    bottom: 84, // Positioned cleanly above TabBar so it never covers TabBar controls
+    bottom: 84,
     zIndex: 999,
   },
   fabButton: {
@@ -303,7 +481,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheetContainer: {
-    height: '82%',
+    height: '84%',
     backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -396,7 +574,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   msgBubble: {
-    maxWidth: '88%',
+    maxWidth: '89%',
     borderRadius: 16,
     padding: 12,
     gap: 6,
@@ -413,7 +591,68 @@ const styles = StyleSheet.create({
   },
   msgText: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
+  },
+  formattedContainer: {
+    gap: 5,
+  },
+  msgHeading: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: colors.primaryDark,
+    marginTop: 2,
+  },
+  msgDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
+  },
+  listItemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  bulletDot: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '800',
+  },
+  numberBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    paddingHorizontal: 5,
+  },
+  numberBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primaryDark,
+  },
+  inlineBold: {
+    fontWeight: '700',
+  },
+  inlineItalic: {
+    fontStyle: 'italic',
+  },
+  inlineCodeAi: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.primaryDark,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  inlineCodeUser: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   msgTextUser: {
     color: '#FFFFFF',
@@ -430,6 +669,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
     color: colors.primary,
+  },
+  orderReceiptCard: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    gap: 4,
+  },
+  orderReceiptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  orderReceiptTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  orderReceiptSub: {
+    fontSize: 11,
+    color: '#047857',
+  },
+  viewOrderBtn: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#059669',
+  },
+  viewOrderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   suggestedList: {
     gap: 8,
@@ -455,19 +730,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
+  priceBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   suggestedPrice: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
   },
+  flashTag: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: '#FEE2E2',
+  },
+  flashTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
   suggestedBtnRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 4,
   },
   viewBookBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
@@ -481,8 +773,8 @@ const styles = StyleSheet.create({
   quickAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
+    gap: 3,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
     backgroundColor: colors.primary,
@@ -490,6 +782,20 @@ const styles = StyleSheet.create({
   quickAddBtnText: {
     fontSize: 11,
     fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  quickOrderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: colors.accent,
+  },
+  quickOrderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   chipsSection: {
@@ -510,6 +816,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
     borderColor: colors.primaryBorder,
+    maxWidth: 280,
   },
   chipText: {
     fontSize: 12,
@@ -544,4 +851,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-

@@ -17,6 +17,7 @@ import { Address, formatCurrencyVND } from '@shared/types';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
+import { authService } from '@/services/authService';
 import { ApiError } from '@/services/httpClient';
 
 type ProfileSection = 'ADDRESSES' | 'VOUCHERS' | 'WISHLIST' | 'NOTIFICATIONS' | 'FAQ';
@@ -61,6 +62,8 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [resetNewPassword, setResetNewPassword] = useState('');
   const [authError, setAuthError] = useState<AuthAlertState | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
@@ -125,6 +128,9 @@ export default function ProfileScreen() {
     setAuthError(null);
     setAuthSuccess(null);
     setPassword('');
+    setOtpCode('');
+    setOtpSent(false);
+    setResetNewPassword('');
     setShowPassword(false);
   };
 
@@ -134,12 +140,48 @@ export default function ProfileScreen() {
     setAuthSuccess(null);
 
     if (authMode === 'FORGOT_OTP') {
-      setAuthError({
-        kind: 'RESTRICTED',
-        title: 'Tính năng đang được cập nhật',
-        message:
-          'Khôi phục mật khẩu qua OTP sẽ sớm được hỗ trợ. Nếu cần cấp lại mật khẩu, vui lòng liên hệ CSKH 1900 6886.',
-      });
+      if (!email.trim()) {
+        setAuthError({
+          kind: 'ERROR',
+          title: 'Thiếu địa chỉ email',
+          message: 'Vui lòng nhập email đã đăng ký tài khoản.',
+        });
+        return;
+      }
+
+      setIsAuthSubmitting(true);
+      try {
+        if (!otpSent) {
+          const res = await authService.requestPasswordReset(email);
+          setOtpSent(true);
+          const baseMsg = res?.message || 'Đã tạo mã xác thực OTP khôi phục mật khẩu.';
+          setAuthSuccess(
+            res?.demoOtp
+              ? `${baseMsg} (Mã OTP thử nghiệm: ${res.demoOtp})`
+              : baseMsg
+          );
+        } else {
+          if (!otpCode.trim() || resetNewPassword.length < 6) {
+            setAuthError({
+              kind: 'ERROR',
+              title: 'Thiếu thông tin xác thực',
+              message: 'Vui lòng nhập mã OTP 6 chữ số và mật khẩu mới (tối thiểu 6 ký tự).',
+            });
+            return;
+          }
+          await authService.resetPasswordWithOtp(email, otpCode, resetNewPassword);
+          setAuthMode('LOGIN');
+          setOtpSent(false);
+          setOtpCode('');
+          setResetNewPassword('');
+          setPassword('');
+          setAuthSuccess('Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.');
+        }
+      } catch (err) {
+        setAuthError(buildAuthAlert(err, authMode));
+      } finally {
+        setIsAuthSubmitting(false);
+      }
       return;
     }
 
@@ -561,18 +603,46 @@ export default function ProfileScreen() {
                     </Pressable>
                   </View>
                 </>
-              ) : (
+              ) : otpSent ? (
                 <>
                   <Text style={styles.inputLabel}>Mã xác thực OTP (6 chữ số)</Text>
                   <TextInput
                     value={otpCode}
                     onChangeText={setOtpCode}
-                    placeholder="Nhập mã OTP"
+                    placeholder="Nhập mã OTP 6 chữ số"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="numeric"
+                    maxLength={6}
                     style={styles.input}
                   />
+                  <Text style={styles.inputLabel}>Mật khẩu mới</Text>
+                  <View style={styles.passwordWrap}>
+                    <TextInput
+                      value={resetNewPassword}
+                      onChangeText={setResetNewPassword}
+                      placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                      placeholderTextColor={colors.textMuted}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      style={styles.passwordInput}
+                    />
+                    <Pressable
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      hitSlop={8}
+                      style={styles.eyeBtn}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </Pressable>
+                  </View>
                 </>
+              ) : (
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>
+                  Nhập email đã đăng ký để nhận mã xác thực OTP 6 chữ số đặt lại mật khẩu.
+                </Text>
               )}
 
               <Pressable
@@ -587,7 +657,9 @@ export default function ProfileScreen() {
                       ? 'Đăng nhập ngay'
                       : authMode === 'REGISTER'
                         ? 'Tạo tài khoản mới'
-                        : 'Xác nhận OTP & Đặt lại mật khẩu'}
+                        : otpSent
+                          ? 'Xác nhận OTP & Đặt lại mật khẩu'
+                          : 'Gửi mã OTP xác thực'}
                 </Text>
               </Pressable>
             </View>

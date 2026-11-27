@@ -22,6 +22,7 @@ import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -66,6 +67,112 @@ public class VoucherService {
                 .stream()
                 .map(this::toVoucherDto)
                 .toList();
+    }
+
+    /**
+     * Tự động tìm mã giảm giá đang mở mang lại số tiền giảm cao nhất cho 1 đầu sách cụ thể (không ném Exception).
+     * Dùng cho Tư vấn viên AI tự động áp mã hời nhất khi đặt đơn nhanh cho khách.
+     */
+    @Transactional(readOnly = true)
+    public Optional<VoucherValidationResponse> findBestVoucherForSingleBook(BigDecimal tamTinh, DanhMuc bookCategory) {
+        if (tamTinh == null || tamTinh.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
+        BigDecimal phiVanChuyen = tamTinh.compareTo(NGUONG_MIEN_PHI_SHIP) >= 0
+                ? BigDecimal.ZERO
+                : PHI_VAN_CHUYEN_MAC_DINH;
+        BigDecimal maxPayable = tamTinh.add(phiVanChuyen);
+
+        VoucherValidationResponse best = null;
+        for (MaGiamGia v : maGiamGiaRepository.findActiveVouchers(LocalDate.now())) {
+            if (v.getDanhMuc() != null && (bookCategory == null || !isCategoryInScope(bookCategory, v.getDanhMuc().getId()))) {
+                continue;
+            }
+            BigDecimal donToiThieu = v.getDonToiThieu() == null ? BigDecimal.ZERO : v.getDonToiThieu();
+            if (tamTinh.compareTo(donToiThieu) < 0) {
+                continue;
+            }
+            BigDecimal discount = calculateDiscountAmount(v, tamTinh).min(maxPayable);
+            if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (best == null || discount.compareTo(best.tienGiamGia()) > 0) {
+                best = new VoucherValidationResponse(
+                        toVoucherDto(v),
+                        tamTinh,
+                        tamTinh,
+                        phiVanChuyen,
+                        discount,
+                        maxPayable.subtract(discount)
+                );
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * Tự động tìm mã giảm giá đang mở tiết kiệm nhiều tiền nhất cho các sách đang tick chọn trong giỏ hàng.
+     */
+    @Transactional(readOnly = true)
+    public Optional<VoucherValidationResponse> findBestVoucherForSelectedCart(String nguoiDungId) {
+        List<GioHang> selectedRows = gioHangRepository.findAllWithSachByNguoiDungId(nguoiDungId)
+                .stream()
+                .filter(row -> Boolean.TRUE.equals(row.getDaChon()))
+                .toList();
+        if (selectedRows.isEmpty()) {
+            return Optional.empty();
+        }
+
+        BigDecimal tamTinhToanDon = BigDecimal.ZERO;
+        for (GioHang row : selectedRows) {
+            tamTinhToanDon = tamTinhToanDon.add(
+                    resolveEffectivePrice(row.getSach()).multiply(BigDecimal.valueOf(row.getSoLuong()))
+            );
+        }
+        if (tamTinhToanDon.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
+
+        BigDecimal phiVanChuyen = tamTinhToanDon.compareTo(NGUONG_MIEN_PHI_SHIP) >= 0
+                ? BigDecimal.ZERO
+                : PHI_VAN_CHUYEN_MAC_DINH;
+        BigDecimal maxPayable = tamTinhToanDon.add(phiVanChuyen);
+
+        VoucherValidationResponse best = null;
+        for (MaGiamGia v : maGiamGiaRepository.findActiveVouchers(LocalDate.now())) {
+            String targetCatId = v.getDanhMuc() != null ? v.getDanhMuc().getId() : null;
+            BigDecimal matchingSubtotal = BigDecimal.ZERO;
+            for (GioHang row : selectedRows) {
+                Sach s = row.getSach();
+                if (targetCatId == null || isCategoryInScope(s.getDanhMuc(), targetCatId)) {
+                    matchingSubtotal = matchingSubtotal.add(
+                            resolveEffectivePrice(s).multiply(BigDecimal.valueOf(row.getSoLuong()))
+                    );
+                }
+            }
+            if (matchingSubtotal.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal donToiThieu = v.getDonToiThieu() == null ? BigDecimal.ZERO : v.getDonToiThieu();
+            if (matchingSubtotal.compareTo(donToiThieu) < 0) {
+                continue;
+            }
+            BigDecimal discount = calculateDiscountAmount(v, matchingSubtotal).min(maxPayable);
+            if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (best == null || discount.compareTo(best.tienGiamGia()) > 0) {
+                best = new VoucherValidationResponse(
+                        toVoucherDto(v),
+                        tamTinhToanDon,
+                        matchingSubtotal,
+                        phiVanChuyen,
+                        discount,
+                        maxPayable.subtract(discount)
+                );
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     /**

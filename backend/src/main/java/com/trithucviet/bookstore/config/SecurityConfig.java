@@ -58,7 +58,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Cac cong cong khai khong can dang nhap
                         .requestMatchers("/api/v1/auth/**", "/api/admin/auth/**", "/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/books/**", "/api/v1/categories/**", "/api/v1/vouchers/active").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/books/**", "/api/v1/categories/**", "/api/v1/vouchers/active", "/api/v1/store-config").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/chat/ask").permitAll()
                         // Cong Web Admin: chan hoan toan CUSTOMER, chi cho 3 vai tro nhan su
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "WAREHOUSE_MANAGER", "CSKH")
                         // Cac cong con lai yeu cau dang nhap JWT

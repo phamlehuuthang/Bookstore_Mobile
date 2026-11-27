@@ -260,6 +260,7 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   suggestedBooks?: Book[];
+  createdOrderCode?: string;
 }
 
 // ============================================================================

@@ -24,9 +24,39 @@ import {
 import { colors } from '@/theme/colors';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
+import { authService } from '@/services/authService';
 import { orderService } from '@/services/orderService';
 import { EmptyStateView } from '@/components/common/StateViews';
 import { evaluateVoucher } from '@/utils/voucherEligibility';
+
+function resolveVietQrBankCode(bankName: string): string {
+  const normalized = (bankName || '').toLowerCase();
+  if (normalized.includes('vietcombank') || normalized.includes('vcb')) return 'VCB';
+  if (normalized.includes('mbbank') || normalized.includes('mb')) return 'MB';
+  if (normalized.includes('techcombank') || normalized.includes('tcb')) return 'TCB';
+  if (normalized.includes('bidv')) return 'BIDV';
+  if (normalized.includes('vietinbank') || normalized.includes('icb')) return 'ICB';
+  if (normalized.includes('acb')) return 'ACB';
+  if (normalized.includes('tpbank') || normalized.includes('tpb')) return 'TPB';
+  if (normalized.includes('vpbank') || normalized.includes('vpb')) return 'VPB';
+  if (normalized.includes('agribank')) return 'VBA';
+  return 'VCB';
+}
+
+function buildVietQrImageUrl(params: {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  amount: number;
+  addInfo: string;
+}): string {
+  const bankCode = resolveVietQrBankCode(params.bankName);
+  const accNo = encodeURIComponent((params.accountNumber || '109603022005').trim());
+  const amount = Math.max(0, Math.round(params.amount));
+  const addInfo = encodeURIComponent(params.addInfo);
+  const accountName = encodeURIComponent(params.accountHolder || 'PHAM LE HUU THANG');
+  return `https://img.vietqr.io/image/${bankCode}-${accNo}-compact2.png?amount=${amount}&addInfo=${addInfo}&accountName=${accountName}`;
+}
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -56,6 +86,28 @@ export default function CheckoutScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [storeBank, setStoreBank] = useState({
+    bankName: 'VietinBank',
+    bankAccountNumber: '109603022005',
+    bankAccountHolder: 'PHAM LE HUU THANG',
+  });
+
+  useEffect(() => {
+    authService
+      .getPublicStoreConfig()
+      .then((cfg) => {
+        if (cfg.bankAccountNumber) {
+          setStoreBank({
+            bankName: cfg.bankName || 'VietinBank',
+            bankAccountNumber: cfg.bankAccountNumber,
+            bankAccountHolder: cfg.bankAccountHolder || 'PHAM LE HUU THANG',
+          });
+        }
+      })
+      .catch(() => {
+        // Giữ cấu hình mặc định nếu mất kết nối tạm thời
+      });
+  }, []);
 
   // State cho Cửa sổ chọn Voucher (Modal)
   const [voucherModalVisible, setVoucherModalVisible] = useState(false);
@@ -178,6 +230,39 @@ export default function CheckoutScreen() {
                 {PAYMENT_METHOD_LABELS[createdOrder.paymentMethod]}
               </Text>
             </View>
+            {createdOrder.paymentMethod === 'BANK_QR' ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
+                  Quét mã VietQR để hoàn tất thanh toán
+                </Text>
+                <Image
+                  source={{
+                    uri: buildVietQrImageUrl({
+                      bankName: storeBank.bankName,
+                      accountNumber: storeBank.bankAccountNumber,
+                      accountHolder: storeBank.bankAccountHolder,
+                      amount: createdOrder.totalAmount,
+                      addInfo: `TTV ${createdOrder.orderCode}`,
+                    }),
+                  }}
+                  style={{ width: 190, height: 190, borderRadius: 10, backgroundColor: '#FFFFFF' }}
+                  resizeMode="contain"
+                />
+                <Text selectable style={{ fontSize: 11.5, color: colors.textSecondary, textAlign: 'center' }}>
+                  {storeBank.bankName} • STK: {storeBank.bankAccountNumber}{'\n'}
+                  Nội dung CK: TTV {createdOrder.orderCode}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.successActions}>
@@ -474,7 +559,7 @@ export default function CheckoutScreen() {
                 {
                   key: 'BANK_QR',
                   title: 'Chuyển khoản ngân hàng (Mã VietQR)',
-                  sub: 'Vietcombank • Tự động xác nhận trong 5 giây',
+                  sub: `${storeBank.bankName} • Tự động xác nhận trong 5 giây`,
                   icon: 'qr-code-outline',
                 },
                 {
@@ -510,17 +595,29 @@ export default function CheckoutScreen() {
             })}
 
             {paymentMethod === 'BANK_QR' ? (
-              <View style={styles.qrPreviewBox}>
-                <Ionicons name="qr-code" size={56} color={colors.primary} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.addrName}>
-                    Vietcombank • 0071001234567
+              <View style={[styles.qrPreviewBox, { flexDirection: 'column', alignItems: 'center', gap: 10 }]}>
+                <Image
+                  source={{
+                    uri: buildVietQrImageUrl({
+                      bankName: storeBank.bankName,
+                      accountNumber: storeBank.bankAccountNumber,
+                      accountHolder: storeBank.bankAccountHolder,
+                      amount: finalTotal,
+                      addInfo: `TTV THANH TOAN ${user?.phone || ''}`.trim(),
+                    }),
+                  }}
+                  style={{ width: 185, height: 185, borderRadius: 10, backgroundColor: '#FFFFFF' }}
+                  resizeMode="contain"
+                />
+                <View style={{ width: '100%', gap: 3, alignItems: 'center' }}>
+                  <Text selectable style={styles.addrName}>
+                    {storeBank.bankName} • STK: {storeBank.bankAccountNumber}
                   </Text>
-                  <Text style={styles.addrStreet}>
-                    Chủ TK: CONG TY CP SACH TRI THUC VIET
+                  <Text selectable style={styles.addrStreet}>
+                    Chủ TK: {storeBank.bankAccountHolder}
                   </Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                    Số tiền: {formatCurrencyVND(finalTotal)}
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>
+                    Số tiền tự động điền: {formatCurrencyVND(finalTotal)}
                   </Text>
                 </View>
               </View>

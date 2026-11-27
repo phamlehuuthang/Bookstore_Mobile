@@ -1,13 +1,40 @@
-import { db } from '@shared/index';
 import { Book, Category, Review } from '@shared/types';
 import { apiRequest } from '@/services/httpClient';
+
+const RECENTLY_VIEWED_STORAGE_KEY = 'ttv_recently_viewed_books_v1';
+const SEARCH_HISTORY_STORAGE_KEY = 'ttv_search_history_v1';
+let memoryRecentlyViewed: Book[] = [];
+let memorySearchHistory: string[] = [];
+
+function readStorageJson<T>(key: string, fallback: T): T {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(key);
+      if (raw) return JSON.parse(raw) as T;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function writeStorageJson<T>(key: string, value: T): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export type UserTrackingAction =
   | 'XEM_CHI_TIET'
   | 'TIM_KIEM'
   | 'THEM_YEU_THICH'
   | 'THEM_GIO_HANG'
-  | 'MUA_HANG';
+  | 'MUA_HANG'
+  | 'BO_QUA_DE_XUAT';
 
 export type CatalogSortBy =
   | 'popular'
@@ -378,10 +405,57 @@ export const bookService = {
       `/api/v1/books/${encodeURIComponent(bookId)}`,
       { withAuth: false }
     );
+    const book = mapBookDetail(dto);
+    this.recordRecentlyViewed(book);
     return {
-      book: mapBookDetail(dto),
+      book,
       relatedBooks: (dto.sachCungChuDe || []).map(mapBook),
     };
+  },
+
+  recordRecentlyViewed(book: Book): void {
+    const current = this.getRecentlyViewedBooks().filter((b) => b.id !== book.id);
+    const next = [book, ...current].slice(0, 12);
+    memoryRecentlyViewed = next;
+    writeStorageJson(RECENTLY_VIEWED_STORAGE_KEY, next);
+  },
+
+  getRecentlyViewedBooks(): Book[] {
+    if (memoryRecentlyViewed.length > 0) return memoryRecentlyViewed;
+    const stored = readStorageJson<Book[]>(RECENTLY_VIEWED_STORAGE_KEY, []);
+    memoryRecentlyViewed = Array.isArray(stored) ? stored : [];
+    return memoryRecentlyViewed;
+  },
+
+  getSearchHistory(): string[] {
+    if (memorySearchHistory.length > 0) return memorySearchHistory;
+    const stored = readStorageJson<string[]>(SEARCH_HISTORY_STORAGE_KEY, []);
+    memorySearchHistory = Array.isArray(stored) ? stored : [];
+    return memorySearchHistory;
+  },
+
+  addSearchHistory(keyword: string): string[] {
+    const clean = keyword.trim();
+    if (clean.length < 2) return this.getSearchHistory();
+    const current = this.getSearchHistory().filter(
+      (k) => k.toLowerCase() !== clean.toLowerCase()
+    );
+    const next = [clean, ...current].slice(0, 8);
+    memorySearchHistory = next;
+    writeStorageJson(SEARCH_HISTORY_STORAGE_KEY, next);
+    return next;
+  },
+
+  removeSearchHistoryItem(keyword: string): string[] {
+    const next = this.getSearchHistory().filter((k) => k !== keyword);
+    memorySearchHistory = next;
+    writeStorageJson(SEARCH_HISTORY_STORAGE_KEY, next);
+    return next;
+  },
+
+  clearSearchHistory(): void {
+    memorySearchHistory = [];
+    writeStorageJson(SEARCH_HISTORY_STORAGE_KEY, []);
   },
 
   async getBookDetail(bookId: string): Promise<Book | undefined> {
@@ -424,6 +498,27 @@ export const bookService = {
     if (behaviorLogs.length > 80) {
       behaviorLogs.length = 80;
     }
+
+    // Cách B: Các hành vi THEM_YEU_THICH, THEM_GIO_HANG, MUA_HANG đã được Backend tự động ghi nhận
+    // trong CartWishlistService và OrderService. Client chỉ gửi thêm các sự kiện tương tác đọc/xem
+    // (XEM_CHI_TIET, TIM_KIEM, BO_QUA_DE_XUAT) lên POST /api/v1/tracking/event để tránh ghi trùng 2 lần.
+    if (
+      payload.action === 'XEM_CHI_TIET' ||
+      payload.action === 'TIM_KIEM' ||
+      payload.action === 'BO_QUA_DE_XUAT'
+    ) {
+      void apiRequest('/api/v1/tracking/event', {
+        method: 'POST',
+        body: {
+          loaiHanhVi: payload.action,
+          sachId: payload.book.id,
+          danhMucId: payload.book.categoryId,
+          thoiGianXemGiay: dwell,
+        },
+      }).catch(() => {
+        // Bỏ qua lỗi ngầm nếu khách chưa đăng nhập (guest)
+      });
+    }
   },
 
   async getPersonalizedRecommendations(options?: {
@@ -433,104 +528,32 @@ export const bookService = {
     topCategories: string[];
     books: Book[];
   }> {
-    // Lấy Top 60 sách bán chạy thật từ PostgreSQL để gợi ý bằng dữ liệu 186 sách thật
-    const { items: allBooks } = await this.getCatalogBooksPage({
-      sortBy: 'popular',
-      page: 1,
-      size: 60,
-    });
-    const excluded = new Set<string>(options?.excludeBookIds || []);
+    try {
+      const dto = await apiRequest<{
+        reasonLabel: string;
+        topCategories: string[];
+        books: BackendBookDto[];
+      }>('/api/v1/books/recommendations');
 
-    if (behaviorLogs.length === 0) {
+      return {
+        reasonLabel: dto.reasonLabel || 'Gợi ý theo xu hướng đọc tuần này',
+        topCategories: dto.topCategories || [],
+        books: (dto.books || []).map(mapBook),
+      };
+    } catch {
+      // Dự phòng nếu mất kết nối tạm thời
+      const { items: allBooks } = await this.getCatalogBooksPage({
+        sortBy: 'popular',
+        page: 1,
+        size: 6,
+      });
+      const excluded = new Set<string>(options?.excludeBookIds || []);
       return {
         reasonLabel: 'Gợi ý theo xu hướng đọc tuần này',
         topCategories: [],
         books: allBooks.filter((b) => !excluded.has(b.id)).slice(0, 6),
       };
     }
-
-    const categoryScores = new Map<string, { name: string; score: number; lastTs: number }>();
-
-    behaviorLogs.forEach((ev, idx) => {
-      const decay = computeTimeDecayFactor(ev.action, ev.timestamp);
-      if (decay <= 0) return;
-
-      const recencyMultiplier = idx === 0 ? 1.8 : idx < 3 ? 1.35 : 1.0;
-      const ignoredCount = ignoredImpressionsByCategory.get(ev.categoryId) || 0;
-      const fatiguePenalty =
-        ignoredCount > 3 ? Math.pow(0.8, ignoredCount - 3) : 1.0;
-
-      const effectiveScore = ev.weightScore * decay * recencyMultiplier * fatiguePenalty;
-      const current = categoryScores.get(ev.categoryId) || {
-        name: ev.categoryName,
-        score: 0,
-        lastTs: ev.timestamp,
-      };
-      current.score += effectiveScore;
-      if (ev.timestamp > current.lastTs) {
-        current.lastTs = ev.timestamp;
-      }
-      categoryScores.set(ev.categoryId, current);
-    });
-
-    const sortedCategories = Array.from(categoryScores.entries())
-      .filter(([, meta]) => meta.score > 0.2)
-      .sort((a, b) => b[1].score - a[1].score || b[1].lastTs - a[1].lastTs);
-
-    if (sortedCategories.length === 0) {
-      return {
-        reasonLabel: 'Gợi ý theo xu hướng đọc tuần này',
-        topCategories: [],
-        books: allBooks.filter((b) => !excluded.has(b.id)).slice(0, 6),
-      };
-    }
-
-    const quotas = [3, 2, 1];
-    const recommended: Book[] = [];
-    const seenBookIds = new Set<string>(excluded);
-    const activeCategoryNames: string[] = [];
-
-    sortedCategories.slice(0, 3).forEach(([catId, meta], idx) => {
-      const quota = quotas[idx] ?? 1;
-      const candidates = allBooks.filter(
-        (b) => b.categoryId === catId && !seenBookIds.has(b.id)
-      );
-      let addedForCat = 0;
-      for (const b of candidates) {
-        if (addedForCat >= quota || recommended.length >= 6) break;
-        seenBookIds.add(b.id);
-        recommended.push(b);
-        addedForCat++;
-      }
-      if (addedForCat > 0) {
-        activeCategoryNames.push(meta.name);
-        ignoredImpressionsByCategory.set(
-          catId,
-          (ignoredImpressionsByCategory.get(catId) || 0) + 1
-        );
-      }
-    });
-
-    for (const b of allBooks) {
-      if (recommended.length >= 6) break;
-      if (!seenBookIds.has(b.id)) {
-        seenBookIds.add(b.id);
-        recommended.push(b);
-      }
-    }
-
-    const reasonLabel =
-      activeCategoryNames.length >= 2
-        ? `Theo sở thích: ${activeCategoryNames.slice(0, 2).join(' • ')}`
-        : activeCategoryNames.length === 1
-          ? `Vì bạn quan tâm đến ${activeCategoryNames[0]}`
-          : 'Gợi ý phù hợp với bạn';
-
-    return {
-      reasonLabel,
-      topCategories: activeCategoryNames,
-      books: recommended,
-    };
   },
 
   async submitReview(payload: {

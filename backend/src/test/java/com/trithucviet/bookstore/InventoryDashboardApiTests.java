@@ -175,6 +175,11 @@ class InventoryDashboardApiTests {
 
     @Test
     void dashboardPhanQuyenTheoVaiTro_anDoanhThuVoiKhoVaCskh() throws Exception {
+        // Đảm bảo có ít nhất 1 yêu cầu đổi trả CHO_DUYET trong transaction test (tự rollback sau test)
+        entityManager.createNativeQuery("UPDATE yeu_cau_doi_tra SET trang_thai = 'CHO_DUYET' WHERE id = 'dt_01'").executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+
         // CUSTOMER bị chặn 403
         mockMvc.perform(get("/api/admin/dashboard").header("Authorization", customerToken))
                 .andExpect(status().isForbidden());

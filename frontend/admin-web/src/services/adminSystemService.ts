@@ -1,4 +1,3 @@
-import { db } from '@shared/index';
 import {
   DiscountType,
   InventoryReceipt,
@@ -379,14 +378,85 @@ export const adminSystemService = {
     return { recipients: Number(res?.soKhachHangNhan ?? 0) };
   },
 
-  // 4. STORE CONFIGURATION
+  // 4. STORE CONFIGURATION (lưu trữ thật trong PostgreSQL qua /api/admin/settings)
   async getStoreConfig(): Promise<StoreConfig> {
-    return { ...db.storeConfig };
+    const dto = await adminRequest<{
+      tenCuaHang: string;
+      khauHieu: string;
+      logoUrl: string;
+      hotline: string;
+      emailHoTro: string;
+      diaChiTruSo: string;
+      phiShipMacDinh: number;
+      mienPhiShipTu: number;
+      nguongCanhBaoTonKho: number;
+      nganHangTen: string;
+      nganHangSoTk: string;
+      nganHangChuTk: string;
+    }>('/api/admin/settings');
+
+    return {
+      storeName: dto.tenCuaHang,
+      tagline: dto.khauHieu || '',
+      logoUrl: dto.logoUrl || '',
+      hotline: dto.hotline,
+      supportEmail: dto.emailHoTro,
+      headquartersAddress: dto.diaChiTruSo,
+      defaultShippingFee: Number(dto.phiShipMacDinh ?? 25000),
+      freeShippingThreshold: Number(dto.mienPhiShipTu ?? 300000),
+      lowStockThreshold: Number(dto.nguongCanhBaoTonKho ?? 5),
+      bankName: dto.nganHangTen,
+      bankAccountNumber: dto.nganHangSoTk,
+      bankAccountHolder: dto.nganHangChuTk,
+    };
   },
 
   async updateStoreConfig(nextConfig: StoreConfig): Promise<StoreConfig> {
-    db.storeConfig = { ...nextConfig };
-    return { ...db.storeConfig };
+    const dto = await adminRequest<{
+      tenCuaHang: string;
+      khauHieu: string;
+      logoUrl: string;
+      hotline: string;
+      emailHoTro: string;
+      diaChiTruSo: string;
+      phiShipMacDinh: number;
+      mienPhiShipTu: number;
+      nguongCanhBaoTonKho: number;
+      nganHangTen: string;
+      nganHangSoTk: string;
+      nganHangChuTk: string;
+    }>('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        tenCuaHang: nextConfig.storeName,
+        khauHieu: nextConfig.tagline,
+        logoUrl: nextConfig.logoUrl,
+        hotline: nextConfig.hotline,
+        emailHoTro: nextConfig.supportEmail,
+        diaChiTruSo: nextConfig.headquartersAddress,
+        phiShipMacDinh: nextConfig.defaultShippingFee,
+        mienPhiShipTu: nextConfig.freeShippingThreshold,
+        nguongCanhBaoTonKho: nextConfig.lowStockThreshold,
+        nganHangTen: nextConfig.bankName,
+        nganHangSoTk: nextConfig.bankAccountNumber,
+        nganHangChuTk: nextConfig.bankAccountHolder,
+      }),
+    });
+
+    return {
+      storeName: dto.tenCuaHang,
+      tagline: dto.khauHieu || '',
+      logoUrl: dto.logoUrl || '',
+      hotline: dto.hotline,
+      supportEmail: dto.emailHoTro,
+      headquartersAddress: dto.diaChiTruSo,
+      defaultShippingFee: Number(dto.phiShipMacDinh ?? 25000),
+      freeShippingThreshold: Number(dto.mienPhiShipTu ?? 300000),
+      lowStockThreshold: Number(dto.nguongCanhBaoTonKho ?? 5),
+      bankName: dto.nganHangTen,
+      bankAccountNumber: dto.nganHangSoTk,
+      bankAccountHolder: dto.nganHangChuTk,
+    };
   },
 };
 

@@ -19,6 +19,7 @@ import com.trithucviet.bookstore.entity.SoDiaChi;
 import com.trithucviet.bookstore.entity.ThongBao;
 import com.trithucviet.bookstore.entity.TkNguoiDung;
 import com.trithucviet.bookstore.entity.YeuCauDoiTra;
+import com.trithucviet.bookstore.entity.enums.LoaiHanhVi;
 import com.trithucviet.bookstore.entity.enums.LoaiThongBao;
 import com.trithucviet.bookstore.entity.enums.PhuongThucThanhToan;
 import com.trithucviet.bookstore.entity.enums.TrangThaiDon;
@@ -80,6 +81,7 @@ public class OrderService {
     private final ThongBaoRepository thongBaoRepository;
     private final YeuCauDoiTraRepository yeuCauDoiTraRepository;
     private final VoucherService voucherService;
+    private final RecommendationTrackingService recommendationTrackingService;
 
     public OrderService(
             DonHangRepository donHangRepository,
@@ -92,7 +94,8 @@ public class OrderService {
             MaGiamGiaRepository maGiamGiaRepository,
             ThongBaoRepository thongBaoRepository,
             YeuCauDoiTraRepository yeuCauDoiTraRepository,
-            VoucherService voucherService
+            VoucherService voucherService,
+            RecommendationTrackingService recommendationTrackingService
     ) {
         this.donHangRepository = donHangRepository;
         this.chiTietDonHangRepository = chiTietDonHangRepository;
@@ -105,6 +108,7 @@ public class OrderService {
         this.thongBaoRepository = thongBaoRepository;
         this.yeuCauDoiTraRepository = yeuCauDoiTraRepository;
         this.voucherService = voucherService;
+        this.recommendationTrackingService = recommendationTrackingService;
     }
 
     // =========================================================================
@@ -230,6 +234,8 @@ public class OrderService {
             item.setDonGia(resolveEffectivePrice(sach));
             item.setSoLuong(row.getSoLuong());
             orderItems.add(item);
+            // Cách B: Tự động ghi nhận hành vi MUA_HANG (+10 điểm) cho từng cuốn sách khách đặt mua
+            recommendationTrackingService.recordAutoAction(customer, sach, LoaiHanhVi.MUA_HANG);
         }
         chiTietDonHangRepository.saveAllAndFlush(orderItems);
 
@@ -262,6 +268,163 @@ public class OrderService {
         );
 
         return toOrderDto(order, orderItems, List.of(timeline));
+    }
+
+    /**
+     * Đặt đơn hàng trực tiếp cho 1 cuốn sách cụ thể từ Tư vấn viên AI (Bước 10 - Quy tắc A2):
+     * - KHÔNG đụng vào các món đang nằm sẵn trong bảng gio_hang của khách.
+     * - Giao về địa chỉ mặc định của khách với phương thức thanh toán COD.
+     * - Vẫn áp dụng đầy đủ @Transactional: kiểm tra & trừ ton_kho, tăng da_ban, tạo DonHang + ChiTietDonHang
+     *   + LichSuDonHang, cộng chi tiêu, gửi ThongBao và tự động ghi hành vi MUA_HANG (+10 điểm).
+     */
+    @Transactional
+    public OrderDto createDirectOrderForAi(
+            String nguoiDungId,
+            String sachId,
+            int soLuong,
+            String ghiChu
+    ) {
+        return createDirectOrderForAi(nguoiDungId, sachId, soLuong, null, true, ghiChu);
+    }
+
+    /**
+     * Đặt đơn hàng COD trực tiếp từ Tư vấn viên AI kèm tự động săn & áp dụng mã giảm giá tốt nhất (nếu đủ điều kiện).
+     * - Nếu khách chỉ định `requestedVoucherCode`: kiểm tra và áp đúng mã đó.
+     * - Nếu `requestedVoucherCode` rỗng và `autoBestVoucher = true`: tự quét các mã đang mở và áp mã giảm nhiều nhất.
+     * - Giữ nguyên 100% các món đang nằm sẵn trong bảng `gio_hang`.
+     */
+    @Transactional
+    public OrderDto createDirectOrderForAi(
+            String nguoiDungId,
+            String sachId,
+            int soLuong,
+            String requestedVoucherCode,
+            boolean autoBestVoucher,
+            String ghiChu
+    ) {
+        TkNguoiDung customer = requireActiveCustomer(nguoiDungId);
+        SoDiaChi shippingAddress = resolveCustomerAddress(nguoiDungId, null);
+
+        if (soLuong <= 0) {
+            throw new BusinessException("Số lượng đặt mua phải lớn hơn 0.");
+        }
+
+        Sach sach = sachRepository.findByIdWithDetails(sachId.trim())
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy cuốn sách cần đặt."));
+        if (!Boolean.TRUE.equals(sach.getHienThi())) {
+            throw new BusinessException("Sách \"" + sach.getTieuDe() + "\" hiện đã ngừng kinh doanh.");
+        }
+
+        int currentStock = safeInt(sach.getTonKho());
+        if (currentStock <= 0) {
+            throw new BusinessException("Sách \"" + sach.getTieuDe() + "\" hiện đã hết hàng.");
+        }
+        if (soLuong > currentStock) {
+            throw new BusinessException(
+                    "Sách \"" + sach.getTieuDe() + "\" chỉ còn " + currentStock + " cuốn trong kho."
+            );
+        }
+
+        BigDecimal unitPrice = resolveEffectivePrice(sach);
+        BigDecimal tamTinh = unitPrice.multiply(BigDecimal.valueOf(soLuong));
+        BigDecimal phiVanChuyen = tamTinh.compareTo(NGUONG_MIEN_PHI_SHIP) >= 0
+                ? BigDecimal.ZERO
+                : PHI_VAN_CHUYEN_MAC_DINH;
+
+        BigDecimal tienGiamGia = BigDecimal.ZERO;
+        String appliedVoucherCode = null;
+        String normalizedCode = normalizeBlankToNull(requestedVoucherCode);
+
+        if (normalizedCode != null && !"AUTO".equalsIgnoreCase(normalizedCode)) {
+            VoucherValidationResponse vRes = voucherService.validateVoucher(
+                    nguoiDungId,
+                    new ApplyVoucherRequest(normalizedCode, tamTinh, sach.getDanhMuc().getId())
+            );
+            appliedVoucherCode = vRes.voucher().maCode();
+            tienGiamGia = vRes.tienGiamGia();
+            phiVanChuyen = vRes.phiVanChuyen();
+        } else if (autoBestVoucher || "AUTO".equalsIgnoreCase(normalizedCode)) {
+            var bestOpt = voucherService.findBestVoucherForSingleBook(tamTinh, sach.getDanhMuc());
+            if (bestOpt.isPresent()) {
+                VoucherValidationResponse best = bestOpt.get();
+                appliedVoucherCode = best.voucher().maCode();
+                tienGiamGia = best.tienGiamGia();
+                phiVanChuyen = best.phiVanChuyen();
+            }
+        }
+
+        if (appliedVoucherCode != null) {
+            MaGiamGia voucher = maGiamGiaRepository.findByMaCodeWithDanhMucIgnoreCase(appliedVoucherCode)
+                    .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy mã giảm giá."));
+            voucher.setDaSuDung(safeInt(voucher.getDaSuDung()) + 1);
+            maGiamGiaRepository.saveAndFlush(voucher);
+        }
+
+        BigDecimal tongThanhToan = tamTinh.add(phiVanChuyen).subtract(tienGiamGia);
+        if (tongThanhToan.compareTo(BigDecimal.ZERO) < 0) {
+            tongThanhToan = BigDecimal.ZERO;
+        }
+
+        sach.setTonKho(currentStock - soLuong);
+        sach.setDaBan(safeInt(sach.getDaBan()) + soLuong);
+        sachRepository.saveAndFlush(sach);
+
+        LocalDateTime now = LocalDateTime.now();
+        DonHang order = new DonHang();
+        order.setId("dh_" + shortUuid());
+        order.setMaDonHang(generateUniqueOrderCode());
+        order.setNguoiDung(customer);
+        order.setTenKhachHang(shippingAddress.getHoTenNguoiNhan());
+        order.setSdtKhachHang(shippingAddress.getSoDienThoai());
+        order.setDiaChiGiaoHang(formatFullAddress(shippingAddress));
+        order.setTamTinh(tamTinh);
+        order.setPhiVanChuyen(phiVanChuyen);
+        order.setTienGiamGia(tienGiamGia);
+        order.setMaGiamGiaCode(appliedVoucherCode);
+        order.setTongThanhToan(tongThanhToan);
+        order.setPhuongThucThanhToan(PhuongThucThanhToan.TIEN_MAT_COD);
+        order.setTrangThaiThanhToan(TrangThaiThanhToan.CHUA_THANH_TOAN);
+        order.setTrangThaiDon(TrangThaiDon.CHO_XAC_NHAN);
+        order.setGhiChu(normalizeBlankToNull(ghiChu) != null ? ghiChu.trim() : "Đặt nhanh qua Tư vấn viên AI");
+        order.setDaDanhGia(Boolean.FALSE);
+        order.setNgayTao(now);
+        donHangRepository.saveAndFlush(order);
+
+        ChiTietDonHang item = new ChiTietDonHang();
+        item.setId("ctdh_" + shortUuid());
+        item.setDonHang(order);
+        item.setSach(sach);
+        item.setTieuDeSach(sach.getTieuDe());
+        item.setAnhBiaUrl(sach.getAnhBiaUrl());
+        item.setTenTacGia(sach.getTacGia().getTenTacGia());
+        item.setDonGia(unitPrice);
+        item.setSoLuong(soLuong);
+        chiTietDonHangRepository.saveAndFlush(item);
+
+        LichSuDonHang timeline = appendTimeline(
+                order,
+                TrangThaiDon.CHO_XAC_NHAN,
+                "Đặt hàng thành công (qua Tư vấn viên AI)",
+                "Đơn hàng " + order.getMaDonHang() + " đã được Tư vấn viên AI tạo theo xác nhận của khách hàng.",
+                now
+        );
+
+        BigDecimal currentSpent = customer.getTongChiTieu() != null ? customer.getTongChiTieu() : BigDecimal.ZERO;
+        customer.setTongChiTieu(currentSpent.add(tongThanhToan));
+        customer.setSoDonHang(safeInt(customer.getSoDonHang()) + 1);
+        tkNguoiDungRepository.saveAndFlush(customer);
+
+        recommendationTrackingService.recordAutoAction(customer, sach, LoaiHanhVi.MUA_HANG);
+
+        createOrderNotification(
+                customer,
+                "Đặt hàng thành công " + order.getMaDonHang(),
+                "Đơn hàng " + order.getMaDonHang() + " trị giá " + tongThanhToan.toPlainString()
+                        + "đ đã được đặt qua Tư vấn viên AI.",
+                now
+        );
+
+        return toOrderDto(order, List.of(item), List.of(timeline));
     }
 
     // =========================================================================

@@ -210,6 +210,81 @@ public class DashboardReportService {
         return sb.toString();
     }
 
+    /**
+     * Xuất toàn bộ danh sách đơn hàng dạng CSV (UTF-8 BOM, chỉ ADMIN).
+     */
+    @Transactional(readOnly = true)
+    public String exportOrdersCsv(String adminUserId) {
+        requireAdminStaff(adminUserId);
+        List<DonHang> orders = donHangRepository.findAllOrdered();
+        DateTimeFormatter dtFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("Ma don hang,Ngay tao,Khach hang,Email,So dien thoai,Trang thai,Thanh toan,Tong tien hang (VND),Phi ship (VND),Giam gia (VND),Tong thanh toan (VND)\n");
+        for (DonHang order : orders) {
+            String customerName = order.getNguoiDung() != null ? order.getNguoiDung().getHoTen() : "";
+            String customerEmail = order.getNguoiDung() != null ? order.getNguoiDung().getEmail() : "";
+            String createdAt = order.getNgayTao() != null ? order.getNgayTao().format(dtFmt) : "";
+            String status = order.getTrangThaiDon() != null ? order.getTrangThaiDon().name() : "";
+            String payment = order.getPhuongThucThanhToan() != null ? order.getPhuongThucThanhToan().name() : "";
+            sb.append(csvEscape(order.getMaDonHang())).append(',')
+                    .append(csvEscape(createdAt)).append(',')
+                    .append(csvEscape(customerName)).append(',')
+                    .append(csvEscape(customerEmail)).append(',')
+                    .append(csvEscape(order.getSdtKhachHang())).append(',')
+                    .append(csvEscape(status)).append(',')
+                    .append(csvEscape(payment)).append(',')
+                    .append(safeMoney(order.getTamTinh()).toPlainString()).append(',')
+                    .append(safeMoney(order.getPhiVanChuyen()).toPlainString()).append(',')
+                    .append(safeMoney(order.getTienGiamGia()).toPlainString()).append(',')
+                    .append(safeMoney(order.getTongThanhToan()).toPlainString()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Xuất báo cáo tồn kho & top sách bán chạy dạng CSV (UTF-8 BOM, chỉ ADMIN).
+     */
+    @Transactional(readOnly = true)
+    public String exportInventoryCsv(String adminUserId) {
+        requireAdminStaff(adminUserId);
+        List<Sach> books = sachRepository.findAllWithDetails().stream()
+                .sorted(Comparator.comparingInt((Sach b) -> b.getTonKho() == null ? 0 : b.getTonKho())
+                        .thenComparing(Comparator.comparingInt((Sach b) -> b.getDaBan() == null ? 0 : b.getDaBan()).reversed()))
+                .toList();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append('\uFEFF');
+        sb.append("Ma ISBN,Ten sach,Tac gia,Danh muc,NXB,Gia ban (VND),Gia Flash Sale (VND),Ton kho,Da ban,Canh bao ton kho\n");
+        for (Sach book : books) {
+            int stock = book.getTonKho() == null ? 0 : book.getTonKho();
+            String alert = stock == 0 ? "HET HANG" : (stock <= InventoryService.LOW_STOCK_THRESHOLD ? "SAP HET" : "ON DINH");
+            String flashPrice = Boolean.TRUE.equals(book.getDangFlashSale()) && book.getGiaFlashSale() != null
+                    ? book.getGiaFlashSale().toPlainString()
+                    : "";
+            sb.append(csvEscape(book.getMaIsbn())).append(',')
+                    .append(csvEscape(book.getTieuDe())).append(',')
+                    .append(csvEscape(book.getTacGia() != null ? book.getTacGia().getTenTacGia() : "")).append(',')
+                    .append(csvEscape(book.getDanhMuc() != null ? book.getDanhMuc().getTenDanhMuc() : "")).append(',')
+                    .append(csvEscape(book.getNhaXuatBan() != null ? book.getNhaXuatBan().getTenNxb() : "")).append(',')
+                    .append(safeMoney(book.getGiaBan()).toPlainString()).append(',')
+                    .append(flashPrice).append(',')
+                    .append(stock).append(',')
+                    .append(book.getDaBan() == null ? 0 : book.getDaBan()).append(',')
+                    .append(alert).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private void requireAdminStaff(String adminUserId) {
+        TkNguoiDung staff = tkNguoiDungRepository.findById(adminUserId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.UNAUTHORIZED, "Tài khoản quản trị không tồn tại."));
+        if (staff.getVaiTro() != VaiTro.ADMIN) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Chỉ Quản trị viên (ADMIN) mới có quyền xuất báo cáo này.");
+        }
+    }
+
     // --- Các hàm tính toán nội bộ ---
 
     private Map<String, BigDecimal> buildLatestImportPriceMap() {

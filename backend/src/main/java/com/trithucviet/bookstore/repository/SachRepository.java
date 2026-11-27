@@ -4,6 +4,7 @@ import com.trithucviet.bookstore.entity.Sach;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -84,4 +85,35 @@ public interface SachRepository extends JpaRepository<Sach, String> {
 
     @Query("select count(s) > 0 from Sach s where s.nhaXuatBan.id = :nhaXuatBanId")
     boolean existsByNhaXuatBanId(@Param("nhaXuatBanId") String nhaXuatBanId);
+
+    /**
+     * Tìm top ID đầu sách tương đồng ngữ nghĩa nhất bằng toán tử khoảng cách Cosine (<=>) của pgvector.
+     * Chỉ lấy sách đang hiển thị, còn tồn kho và đã có vector_ngu_nghia.
+     */
+    @Query(value = """
+            SELECT id FROM sach
+            WHERE hien_thi = TRUE
+              AND ton_kho > 0
+              AND vector_ngu_nghia IS NOT NULL
+            ORDER BY vector_ngu_nghia <=> CAST(:vectorLiteral AS vector)
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<String> findTopIdsBySemanticSimilarity(
+            @Param("vectorLiteral") String vectorLiteral,
+            @Param("limit") int limit
+    );
+
+    /**
+     * Lưu trực tiếp mảng vector 768 chiều vào cột pgvector `sach.vector_ngu_nghia`.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE sach
+            SET vector_ngu_nghia = CAST(:vectorLiteral AS vector)
+            WHERE id = :id
+            """, nativeQuery = true)
+    int updateVectorById(
+            @Param("id") String id,
+            @Param("vectorLiteral") String vectorLiteral
+    );
 }

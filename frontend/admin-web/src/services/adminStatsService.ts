@@ -130,25 +130,50 @@ export const adminStatsService = {
   },
 
   async exportRevenueExcelCsv(): Promise<void> {
-    const token = getAdminToken();
-    const res = await fetch(`${ADMIN_API_BASE_URL}/api/admin/reports/revenue-export`, {
-      method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) {
-      throw new Error(`Không thể xuất báo cáo doanh thu (HTTP ${res.status}).`);
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute(
-      'download',
-      `Bao_Cao_Doanh_Thu_BookStore_${new Date().toISOString().slice(0, 10)}.csv`
+    await downloadAdminCsv(
+      '/api/admin/reports/revenue-export',
+      `Bao_Cao_Doanh_Thu_BookStore_${new Date().toISOString().slice(0, 10)}.csv`,
+      'Không thể xuất báo cáo doanh thu'
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  },
+
+  async exportOrdersExcelCsv(): Promise<void> {
+    await downloadAdminCsv(
+      '/api/admin/reports/orders-export',
+      `Bao_Cao_Don_Hang_BookStore_${new Date().toISOString().slice(0, 10)}.csv`,
+      'Không thể xuất báo cáo đơn hàng'
+    );
+  },
+
+  async exportInventoryExcelCsv(): Promise<void> {
+    await downloadAdminCsv(
+      '/api/admin/reports/inventory-export',
+      `Bao_Cao_Ton_Kho_BookStore_${new Date().toISOString().slice(0, 10)}.csv`,
+      'Không thể xuất báo cáo tồn kho'
+    );
   },
 };
+
+async function downloadAdminCsv(
+  endpoint: string,
+  filename: string,
+  errorPrefix: string
+): Promise<void> {
+  const token = getAdminToken();
+  const res = await fetch(`${ADMIN_API_BASE_URL}${endpoint}`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new Error(`${errorPrefix} (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

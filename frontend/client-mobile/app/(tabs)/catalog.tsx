@@ -28,6 +28,15 @@ type PriceRangeKey = 'ALL' | 'UNDER_150K' | '150K_300K' | 'OVER_300K';
 
 const PAGE_SIZE = 20;
 
+const TRENDING_KEYWORDS = [
+  'Nguyễn Nhật Ánh',
+  'Sherlock Holmes',
+  'Lập trình',
+  'Tâm lý',
+  'Kinh tế',
+  'Dế Mèn',
+];
+
 const SORT_OPTIONS: { key: CatalogSortBy; label: string }[] = [
   { key: 'popular', label: 'Bán chạy' },
   { key: 'price_asc', label: 'Giá thấp → cao' },
@@ -44,6 +53,9 @@ export default function CatalogScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState<string[]>(() =>
+    bookService.getSearchHistory()
+  );
   const [selectedCategory, setSelectedCategory] = useState<string>(
     params.categoryId || 'ALL'
   );
@@ -205,6 +217,14 @@ export default function CatalogScreen() {
     return Array.from(pages).sort((a, b) => a - b);
   }, [currentPage, totalPages]);
 
+  const handleApplyKeyword = (keyword: string) => {
+    const clean = keyword.trim();
+    if (!clean) return;
+    setSearchQuery(clean);
+    setCurrentPage(1);
+    setSearchHistory(bookService.addSearchHistory(clean));
+  };
+
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       {/* Search Header */}
@@ -217,6 +237,11 @@ export default function CatalogScreen() {
             onChangeText={(text) => {
               setSearchQuery(text);
               setCurrentPage(1);
+            }}
+            onSubmitEditing={() => {
+              if (searchQuery.trim().length >= 2) {
+                setSearchHistory(bookService.addSearchHistory(searchQuery));
+              }
             }}
             placeholder="Nhập tên sách, tác giả, mã ISBN..."
             placeholderTextColor={colors.textMuted}
@@ -235,6 +260,91 @@ export default function CatalogScreen() {
             </Pressable>
           ) : null}
         </View>
+
+        {/* Lịch sử tìm kiếm & Từ khóa phổ biến */}
+        {searchQuery.trim().length === 0 ? (
+          <View style={{ gap: 6, marginTop: 8 }}>
+            {searchHistory.length > 0 ? (
+              <View style={{ gap: 4 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
+                    Tìm kiếm gần đây
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      bookService.clearSearchHistory();
+                      setSearchHistory([]);
+                    }}
+                    hitSlop={6}
+                  >
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>
+                      Xóa lịch sử
+                    </Text>
+                  </Pressable>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6 }}
+                >
+                  {searchHistory.map((kw) => (
+                    <View
+                      key={`hist-${kw}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingLeft: 10,
+                        paddingRight: 6,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        backgroundColor: colors.background,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <Pressable onPress={() => handleApplyKeyword(kw)}>
+                        <Text style={{ fontSize: 11.5, color: colors.textPrimary }}>{kw}</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setSearchHistory(bookService.removeSearchHistoryItem(kw))}
+                        hitSlop={4}
+                      >
+                        <Ionicons name="close" size={13} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, alignItems: 'center' }}
+            >
+              <Ionicons name="flame-outline" size={14} color={colors.accent} />
+              {TRENDING_KEYWORDS.map((kw) => (
+                <Pressable
+                  key={`trend-${kw}`}
+                  onPress={() => handleApplyKeyword(kw)}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: '#FFF7ED',
+                    borderWidth: 1,
+                    borderColor: '#FED7AA',
+                  }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#C2410C' }}>
+                    {kw}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </View>
 
       {/* Multi-Criteria Filter & Sort Bar */}

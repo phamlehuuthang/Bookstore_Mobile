@@ -311,4 +311,18 @@ export const adminBookService = {
       { method: 'DELETE' }
     );
   },
+
+  // Bước 10: Đồng bộ AI Vector 768 chiều (pgvector) cho toàn bộ kho sách (chỉ ADMIN)
+  async syncAiVectors(force = false): Promise<{
+    geminiConfigured: boolean;
+    totalBooks: number;
+    syncedCount: number;
+    skippedCount: number;
+    failedCount: number;
+    note: string;
+  }> {
+    return adminRequest(`/api/admin/books/sync-vectors?force=${force ? 'true' : 'false'}`, {
+      method: 'POST',
+    });
+  },
 };

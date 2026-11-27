@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import {
@@ -335,9 +336,32 @@ export const Books: React.FC = () => {
       : []),
   ];
 
+  const [isSyncingVectors, setIsSyncingVectors] = useState(false);
+
+  const handleSyncVectors = async () => {
+    if (!isAdmin || isSyncingVectors) return;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsSyncingVectors(true);
+    try {
+      const res = await adminBookService.syncAiVectors(false);
+      setSuccessMsg(
+        res.geminiConfigured
+          ? `Đã đồng bộ AI Vector: ${res.syncedCount} sách mới, ${res.skippedCount} đã có sẵn (Tổng ${res.totalBooks} sách).`
+          : res.note
+      );
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể đồng bộ AI Vector lúc này.'
+      );
+    } finally {
+      setIsSyncingVectors(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             Quản lý Kho Sách ({books.length} đầu sách)
@@ -350,6 +374,17 @@ export const Books: React.FC = () => {
                 : 'Tra cứu thông tin đầu sách, giá bán và tồn kho để tư vấn khách hàng (CSKH chỉ xem)'}
           </p>
         </div>
+        {isAdmin && (
+          <button
+            type="button"
+            disabled={isSyncingVectors}
+            onClick={handleSyncVectors}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60 text-emerald-800 text-xs font-bold cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            {isSyncingVectors ? 'Đang đồng bộ Vector...' : 'Đồng bộ AI Vector'}
+          </button>
+        )}
       </div>
 
       {errorMsg && (

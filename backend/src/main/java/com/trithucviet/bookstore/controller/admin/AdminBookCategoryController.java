@@ -1,5 +1,6 @@
 package com.trithucviet.bookstore.controller.admin;
 
+import com.trithucviet.bookstore.ai.BookVectorService;
 import com.trithucviet.bookstore.dto.request.AuthorUpsertRequest;
 import com.trithucviet.bookstore.dto.request.BookUpsertRequest;
 import com.trithucviet.bookstore.dto.request.CategoryUpsertRequest;
@@ -13,6 +14,7 @@ import com.trithucviet.bookstore.entity.enums.VaiTro;
 import com.trithucviet.bookstore.service.BookService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -42,9 +44,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminBookCategoryController {
 
     private final BookService bookService;
+    private final BookVectorService bookVectorService;
 
-    public AdminBookCategoryController(BookService bookService) {
+    public AdminBookCategoryController(BookService bookService, BookVectorService bookVectorService) {
         this.bookService = bookService;
+        this.bookVectorService = bookVectorService;
     }
 
     // --- 1. QUẢN LÝ SÁCH (BƯỚC 3 - PHẦN 3) ---
@@ -74,10 +78,9 @@ public class AdminBookCategoryController {
             Authentication authentication,
             @Valid @RequestBody BookUpsertRequest request
     ) {
-        return ApiResponse.ok(
-                "Thêm đầu sách mới thành công",
-                bookService.createBook(request, resolveRole(authentication))
-        );
+        AdminBookDto created = bookService.createBook(request, resolveRole(authentication));
+        bookVectorService.embedSingleBookAsync(created.id());
+        return ApiResponse.ok("Thêm đầu sách mới thành công", created);
     }
 
     @PutMapping("/books/{id}")
@@ -87,10 +90,9 @@ public class AdminBookCategoryController {
             @PathVariable("id") String id,
             @Valid @RequestBody BookUpsertRequest request
     ) {
-        return ApiResponse.ok(
-                "Cập nhật thông tin sách thành công",
-                bookService.updateBook(id, request, resolveRole(authentication))
-        );
+        AdminBookDto updated = bookService.updateBook(id, request, resolveRole(authentication));
+        bookVectorService.embedSingleBookAsync(updated.id());
+        return ApiResponse.ok("Cập nhật thông tin sách thành công", updated);
     }
 
     @PatchMapping("/books/{id}/visibility")
@@ -108,6 +110,18 @@ public class AdminBookCategoryController {
     public ApiResponse<Void> deleteBook(@PathVariable("id") String id) {
         bookService.deleteBook(id);
         return ApiResponse.ok("Đã xóa đầu sách khỏi hệ thống", null);
+    }
+
+    // Bước 10: Đồng bộ vector ngữ nghĩa 768 chiều (pgvector) cho toàn bộ đầu sách (chỉ ADMIN)
+    @PostMapping("/books/sync-vectors")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Map<String, Object>> syncBookVectors(
+            @RequestParam(name = "force", required = false, defaultValue = "false") boolean force
+    ) {
+        return ApiResponse.ok(
+                "Đã xử lý đồng bộ AI Vector cho kho sách",
+                bookVectorService.syncAllBookVectors(force)
+        );
     }
 
     // --- 2. QUẢN LÝ DANH MỤC CHA - CON (BƯỚC 3 - PHẦN 4) ---

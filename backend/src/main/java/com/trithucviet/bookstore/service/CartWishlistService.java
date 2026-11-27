@@ -9,6 +9,7 @@ import com.trithucviet.bookstore.entity.GioHang;
 import com.trithucviet.bookstore.entity.Sach;
 import com.trithucviet.bookstore.entity.SachYeuThich;
 import com.trithucviet.bookstore.entity.TkNguoiDung;
+import com.trithucviet.bookstore.entity.enums.LoaiHanhVi;
 import com.trithucviet.bookstore.exception.BusinessException;
 import com.trithucviet.bookstore.repository.GioHangRepository;
 import com.trithucviet.bookstore.repository.SachRepository;
@@ -35,17 +36,20 @@ public class CartWishlistService {
     private final GioHangRepository gioHangRepository;
     private final SachRepository sachRepository;
     private final TkNguoiDungRepository tkNguoiDungRepository;
+    private final RecommendationTrackingService recommendationTrackingService;
 
     public CartWishlistService(
             SachYeuThichRepository sachYeuThichRepository,
             GioHangRepository gioHangRepository,
             SachRepository sachRepository,
-            TkNguoiDungRepository tkNguoiDungRepository
+            TkNguoiDungRepository tkNguoiDungRepository,
+            RecommendationTrackingService recommendationTrackingService
     ) {
         this.sachYeuThichRepository = sachYeuThichRepository;
         this.gioHangRepository = gioHangRepository;
         this.sachRepository = sachRepository;
         this.tkNguoiDungRepository = tkNguoiDungRepository;
+        this.recommendationTrackingService = recommendationTrackingService;
     }
 
     // readOnly = true giúp Hibernate bỏ qua cơ chế dirty-checking, tối ưu hiệu năng cho thao tác chỉ đọc
@@ -90,6 +94,8 @@ public class CartWishlistService {
             yeuThich.setNguoiDung(nguoiDung);
             yeuThich.setSach(sach);
             sachYeuThichRepository.save(yeuThich);
+            // Cách B: Tự động ghi nhận hành vi THEM_YEU_THICH (+4 điểm) vào bảng hanh_vi_nguoi_dung
+            recommendationTrackingService.recordAutoAction(nguoiDung, sach, LoaiHanhVi.THEM_YEU_THICH);
             daYeuThich = true;
         }
 
@@ -153,6 +159,8 @@ public class CartWishlistService {
         item.setNgayCapNhat(LocalDateTime.now());
         // saveAndFlush đẩy thay đổi xuống DB ngay để câu JOIN FETCH kế tiếp đọc được dữ liệu vừa ghi
         gioHangRepository.saveAndFlush(item);
+        // Cách B: Tự động ghi nhận hành vi THEM_GIO_HANG (+6 điểm) vào bảng hanh_vi_nguoi_dung
+        recommendationTrackingService.recordAutoAction(nguoiDung, sach, LoaiHanhVi.THEM_GIO_HANG);
 
         return buildCartResponse(nguoiDungId);
     }

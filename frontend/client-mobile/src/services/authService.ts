@@ -184,6 +184,69 @@ export const authService = {
     });
   },
 
+  async requestPasswordReset(email: string): Promise<{ message: string; demoOtp?: string }> {
+    return apiRequest<{ message: string; demoOtp?: string }>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      withAuth: false,
+      body: { email: email.trim() },
+    });
+  },
+
+  async resetPasswordWithOtp(
+    email: string,
+    otp: string,
+    newPassword: string
+  ): Promise<void> {
+    await apiRequest<void>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      withAuth: false,
+      body: {
+        email: email.trim(),
+        otp: otp.trim(),
+        matKhauMoi: newPassword,
+      },
+    });
+  },
+
+  async getPublicStoreConfig(): Promise<{
+    storeName: string;
+    tagline: string;
+    hotline: string;
+    supportEmail: string;
+    headquartersAddress: string;
+    defaultShippingFee: number;
+    freeShippingThreshold: number;
+    bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolder: string;
+  }> {
+    const dto = await apiRequest<{
+      tenCuaHang: string;
+      khauHieu: string;
+      hotline: string;
+      emailHoTro: string;
+      diaChiTruSo: string;
+      phiShipMacDinh: number;
+      mienPhiShipTu: number;
+      nganHangTen: string;
+      nganHangSoTk: string;
+      nganHangChuTk: string;
+    }>('/api/v1/store-config', { withAuth: false });
+
+    return {
+      storeName: dto.tenCuaHang,
+      tagline: dto.khauHieu || '',
+      hotline: dto.hotline,
+      supportEmail: dto.emailHoTro,
+      headquartersAddress: dto.diaChiTruSo,
+      defaultShippingFee: Number(dto.phiShipMacDinh ?? 25000),
+      freeShippingThreshold: Number(dto.mienPhiShipTu ?? 300000),
+      bankName: dto.nganHangTen,
+      bankAccountNumber: dto.nganHangSoTk,
+      bankAccountHolder: dto.nganHangChuTk,
+    };
+  },
+
   async getAddresses(): Promise<Address[]> {
     const dtos = await apiRequest<BackendAddressDto[]>('/api/v1/addresses');
     return dtos.map(mapAddress);

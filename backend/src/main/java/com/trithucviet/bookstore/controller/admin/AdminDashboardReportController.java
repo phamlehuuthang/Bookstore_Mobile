@@ -42,17 +42,37 @@ public class AdminDashboardReportController {
     @GetMapping("/reports/revenue-export")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<byte[]> exportRevenueCsv(Authentication authentication) {
-        String csv = dashboardReportService.exportRevenueCsv(authentication.getName());
-        byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
+        return buildCsvAttachment(
+                dashboardReportService.exportRevenueCsv(authentication.getName()),
+                "Bao_Cao_Doanh_Thu_BookStore_" + LocalDate.now() + ".csv"
+        );
+    }
 
+    // Xuất báo cáo danh sách đơn hàng Excel CSV (Phần B3): CHỈ ADMIN
+    @GetMapping("/reports/orders-export")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> exportOrdersCsv(Authentication authentication) {
+        return buildCsvAttachment(
+                dashboardReportService.exportOrdersCsv(authentication.getName()),
+                "Bao_Cao_Don_Hang_BookStore_" + LocalDate.now() + ".csv"
+        );
+    }
+
+    // Xuất báo cáo tồn kho & bán chạy 186 đầu sách Excel CSV (Phần B3): CHỈ ADMIN
+    @GetMapping("/reports/inventory-export")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> exportInventoryCsv(Authentication authentication) {
+        return buildCsvAttachment(
+                dashboardReportService.exportInventoryCsv(authentication.getName()),
+                "Bao_Cao_Ton_Kho_BookStore_" + LocalDate.now() + ".csv"
+        );
+    }
+
+    private ResponseEntity<byte[]> buildCsvAttachment(String csv, String filename) {
+        byte[] bytes = csv.getBytes(StandardCharsets.UTF_8);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
-        headers.setContentDisposition(
-                ContentDisposition.attachment()
-                        .filename("Bao_Cao_Doanh_Thu_BookStore_" + LocalDate.now() + ".csv")
-                        .build()
-        );
-
+        headers.setContentDisposition(ContentDisposition.attachment().filename(filename).build());
         return ResponseEntity.ok().headers(headers).body(bytes);
     }
 }

@@ -7,64 +7,114 @@ import { adminStatsService } from '@/services/adminStatsService';
 export const ReportsSettings: React.FC = () => {
   const [config, setConfig] = useState<StoreConfig | null>(null);
   const [savedBanner, setSavedBanner] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    adminSystemService.getStoreConfig().then(setConfig);
+    adminSystemService
+      .getStoreConfig()
+      .then(setConfig)
+      .catch((err) =>
+        setSaveError(err instanceof Error ? err.message : 'Không thể tải cấu hình cửa hàng.')
+      );
   }, []);
 
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!config) return;
-    await adminSystemService.updateStoreConfig(config);
-    setSavedBanner(true);
-    setTimeout(() => setSavedBanner(false), 3000);
-  };
-
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-
-  const handleExportCsv = async () => {
-    if (isExporting) return;
-    setExportError(null);
-    setIsExporting(true);
+    if (!config || isSaving) return;
+    setSaveError(null);
+    setIsSaving(true);
     try {
-      await adminStatsService.exportRevenueExcelCsv();
+      const updated = await adminSystemService.updateStoreConfig(config);
+      setConfig(updated);
+      setSavedBanner(true);
+      setTimeout(() => setSavedBanner(false), 3000);
     } catch (err) {
-      setExportError(
-        err instanceof Error ? err.message : 'Không thể tải file báo cáo doanh thu.'
-      );
+      setSaveError(err instanceof Error ? err.message : 'Lưu cấu hình thất bại.');
     } finally {
-      setIsExporting(false);
+      setIsSaving(false);
     }
   };
 
-  if (!config) return null;
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportingKey, setExportingKey] = useState<'revenue' | 'orders' | 'inventory' | null>(
+    null
+  );
+
+  const handleExportCsv = async (type: 'revenue' | 'orders' | 'inventory') => {
+    if (exportingKey) return;
+    setExportError(null);
+    setExportingKey(type);
+    try {
+      if (type === 'revenue') {
+        await adminStatsService.exportRevenueExcelCsv();
+      } else if (type === 'orders') {
+        await adminStatsService.exportOrdersExcelCsv();
+      } else {
+        await adminStatsService.exportInventoryExcelCsv();
+      }
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : 'Không thể tải file báo cáo.'
+      );
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  if (!config) {
+    return saveError ? (
+      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold">
+        {saveError}
+      </div>
+    ) : null;
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">
-            Xuất Báo Cáo Doanh Thu & Cấu Hình Cửa Hàng
+            Xuất Báo Cáo Excel & Cấu Hình Cửa Hàng
           </h1>
           <p className="text-sm text-slate-500">
-            Trích xuất báo cáo tài chính Excel/CSV từ dữ liệu thật và thiết lập thông tin thương hiệu
+            Trích xuất 3 loại báo cáo CSV/Excel từ PostgreSQL và thiết lập thông tin thương hiệu, VietQR
           </p>
         </div>
-        <button
-          type="button"
-          disabled={isExporting}
-          onClick={handleExportCsv}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          {isExporting ? 'Đang xuất báo cáo...' : 'Tải Báo Cáo Tổng Hợp (Excel CSV)'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={exportingKey !== null}
+            onClick={() => handleExportCsv('revenue')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white text-xs font-semibold cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            {exportingKey === 'revenue' ? 'Đang xuất...' : 'BC Doanh Thu (.csv)'}
+          </button>
+          <button
+            type="button"
+            disabled={exportingKey !== null}
+            onClick={() => handleExportCsv('orders')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 disabled:opacity-60 text-white text-xs font-semibold cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            {exportingKey === 'orders' ? 'Đang xuất...' : 'BC Đơn Hàng (.csv)'}
+          </button>
+          <button
+            type="button"
+            disabled={exportingKey !== null}
+            onClick={() => handleExportCsv('inventory')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-xs font-semibold cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            {exportingKey === 'inventory' ? 'Đang xuất...' : 'BC Tồn Kho (.csv)'}
+          </button>
+        </div>
       </div>
 
-      {exportError && (
+      {(exportError || saveError) && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
-          {exportError}
+          {exportError || saveError}
         </div>
       )}
 

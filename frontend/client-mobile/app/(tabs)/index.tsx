@@ -34,6 +34,7 @@ export default function HomeScreen() {
   const [flashSaleBooks, setFlashSaleBooks] = useState<Book[]>([]);
   const [bestSellerBooks, setBestSellerBooks] = useState<Book[]>([]);
   const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
+  const [recentlyViewedBooks, setRecentlyViewedBooks] = useState<Book[]>([]);
   const [recommendReason, setRecommendReason] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -82,6 +83,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setRecentlyViewedBooks(bookService.getRecentlyViewedBooks());
       const excludeBookIds = [
         ...wishlistBookIds,
         ...cartItems.map((c) => c.book.id),
@@ -382,6 +384,27 @@ export default function HomeScreen() {
                     >
                       {recommendedBooks.map((book) => (
                         <BookCard key={`rec-${book.id}`} book={book} compact />
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
+                {/* Recently Viewed Books Shelf (Sách bạn vừa xem) */}
+                {recentlyViewedBooks.length > 0 ? (
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Sách bạn vừa xem</Text>
+                      <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                        {recentlyViewedBooks.length} cuốn
+                      </Text>
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}
+                    >
+                      {recentlyViewedBooks.map((book) => (
+                        <BookCard key={`recent-${book.id}`} book={book} compact />
                       ))}
                     </ScrollView>
                   </View>

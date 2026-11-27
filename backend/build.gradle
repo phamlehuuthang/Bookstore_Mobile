@@ -37,4 +37,6 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	maxHeapSize = '192m'
+	jvmArgs '-Xms64m', '-XX:MaxMetaspaceSize=160m'
 }

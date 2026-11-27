@@ -254,22 +254,21 @@ CREATE TABLE thong_bao (
     ngay_tao TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Tạm ẩn bảng cau_hinh_cua_hang theo yêu cầu để chỉnh sửa thông tin sau
--- CREATE TABLE cau_hinh_cua_hang (
---     id VARCHAR(50) PRIMARY KEY,
---     ten_cua_hang VARCHAR(150) NOT NULL,
---     khau_hieu VARCHAR(255),
---     logo_url VARCHAR(500),
---     hotline VARCHAR(30) NOT NULL,
---     email_ho_tro VARCHAR(120) NOT NULL,
---     dia_chi_tru_so VARCHAR(255) NOT NULL,
---     phi_ship_mac_dinh DECIMAL(12, 0) NOT NULL DEFAULT 25000,
---     mien_phi_ship_tu DECIMAL(12, 0) NOT NULL DEFAULT 300000,
---     nguong_canh_bao_ton_kho INT NOT NULL DEFAULT 5,
---     ngan_hang_ten VARCHAR(100) NOT NULL,
---     ngan_hang_so_tk VARCHAR(50) NOT NULL,
---     ngan_hang_chu_tk VARCHAR(150) NOT NULL
--- );
+CREATE TABLE cau_hinh_cua_hang (
+    id VARCHAR(50) PRIMARY KEY,
+    ten_cua_hang VARCHAR(150) NOT NULL,
+    khau_hieu VARCHAR(255),
+    logo_url VARCHAR(500),
+    hotline VARCHAR(30) NOT NULL,
+    email_ho_tro VARCHAR(120) NOT NULL,
+    dia_chi_tru_so VARCHAR(255) NOT NULL,
+    phi_ship_mac_dinh DECIMAL(12, 0) NOT NULL DEFAULT 25000,
+    mien_phi_ship_tu DECIMAL(12, 0) NOT NULL DEFAULT 300000,
+    nguong_canh_bao_ton_kho INT NOT NULL DEFAULT 5,
+    ngan_hang_ten VARCHAR(100) NOT NULL,
+    ngan_hang_so_tk VARCHAR(50) NOT NULL,
+    ngan_hang_chu_tk VARCHAR(150) NOT NULL
+);
 
 -- Chỉ mục tối ưu tìm kiếm
 CREATE INDEX idx_sach_danh_muc ON sach(danh_muc_id);

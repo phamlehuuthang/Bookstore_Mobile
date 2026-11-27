@@ -2,8 +2,10 @@ package com.trithucviet.bookstore.service;
 
 import com.trithucviet.bookstore.config.JwtTokenProvider;
 import com.trithucviet.bookstore.dto.request.ChangePasswordRequest;
+import com.trithucviet.bookstore.dto.request.ForgotPasswordRequest;
 import com.trithucviet.bookstore.dto.request.LoginRequest;
 import com.trithucviet.bookstore.dto.request.RegisterRequest;
+import com.trithucviet.bookstore.dto.request.ResetPasswordRequest;
 import com.trithucviet.bookstore.dto.request.UpdateProfileRequest;
 import com.trithucviet.bookstore.dto.response.AuthResponse;
 import com.trithucviet.bookstore.dto.response.UserDto;
@@ -12,9 +14,14 @@ import com.trithucviet.bookstore.entity.enums.VaiTro;
 import com.trithucviet.bookstore.exception.BusinessException;
 import com.trithucviet.bookstore.repository.TkNguoiDungRepository;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -33,7 +40,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final String DEMO_SEED_PASSWORD = "123456";
+    private static final long OTP_TTL_SECONDS = 600L;
+    private static final SecureRandom OTP_RANDOM = new SecureRandom();
 
+    private record OtpRecord(String code, Instant expiresAt) {
+    }
+
+    private final Map<String, OtpRecord> resetOtpStore = new ConcurrentHashMap<>();
     private final TkNguoiDungRepository tkNguoiDungRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
@@ -167,6 +180,58 @@ public class AuthService {
 
         user.setMatKhauMaHoa(passwordEncoder.encode(request.matKhauMoi()));
         tkNguoiDungRepository.saveAndFlush(user);
+    }
+
+    // --- Quên mật khẩu & Đặt lại mật khẩu bằng OTP 6 chữ số (Phần B2) ---
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> requestPasswordResetOtp(ForgotPasswordRequest request) {
+        String email = normalizeEmail(request.email());
+        TkNguoiDung user = tkNguoiDungRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy tài khoản nào đăng ký với email " + email + "."
+                ));
+        if (user.getVaiTro() != VaiTro.CUSTOMER) {
+            throw new BusinessException(
+                    HttpStatus.FORBIDDEN,
+                    "Tài khoản nội bộ vui lòng liên hệ Quản trị viên để cấp lại mật khẩu."
+            );
+        }
+        if (Boolean.TRUE.equals(user.getBiKhoa())) {
+            throw new BusinessException(
+                    HttpStatus.FORBIDDEN,
+                    "Tài khoản đang bị khóa, không thể đặt lại mật khẩu."
+            );
+        }
+
+        String otp = String.format("%06d", OTP_RANDOM.nextInt(1_000_000));
+        resetOtpStore.put(email, new OtpRecord(otp, Instant.now().plusSeconds(OTP_TTL_SECONDS)));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("email", email);
+        out.put("expiresInSeconds", OTP_TTL_SECONDS);
+        out.put("demoOtp", otp);
+        return out;
+    }
+
+    @Transactional
+    public void resetPasswordWithOtp(ResetPasswordRequest request) {
+        String email = normalizeEmail(request.email());
+        OtpRecord record = resetOtpStore.get(email);
+        if (record == null || Instant.now().isAfter(record.expiresAt())) {
+            resetOtpStore.remove(email);
+            throw new BusinessException("Mã OTP đã hết hạn hoặc chưa được yêu cầu. Vui lòng gửi lại mã mới.");
+        }
+        if (!record.code().equals(request.otp().trim())) {
+            throw new BusinessException("Mã OTP không chính xác. Vui lòng kiểm tra lại.");
+        }
+
+        TkNguoiDung user = tkNguoiDungRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản."));
+        user.setMatKhauMaHoa(passwordEncoder.encode(request.matKhauMoi()));
+        tkNguoiDungRepository.saveAndFlush(user);
+        resetOtpStore.remove(email);
     }
 
     // --- Các hàm tiện ích dùng chung ---

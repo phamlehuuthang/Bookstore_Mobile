@@ -42,6 +42,9 @@ export default function BookDetailScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [zoomVisible, setZoomVisible] = useState(false);
+  const [readSampleVisible, setReadSampleVisible] = useState(false);
+  const [readerFontSize, setReaderFontSize] = useState(16);
+  const [readerTheme, setReaderTheme] = useState<'light' | 'sepia' | 'dark'>('sepia');
   const [addedToast, setAddedToast] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [voucherSavedToast, setVoucherSavedToast] = useState<string | null>(null);
@@ -314,14 +317,28 @@ export default function BookDetailScreen() {
             ) : null}
           </View>
 
-          {/* Quick Book Summary Button */}
-          <Pressable onPress={handleAskAiSummary} style={styles.aiSummaryBtn}>
-            <Ionicons name="book-outline" size={16} color={colors.primary} />
-            <Text style={styles.aiSummaryBtnText}>
-              Xem tóm tắt nhanh nội dung cuốn sách này
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-          </Pressable>
+          {/* Quick Read Sample & AI Summary Buttons */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => setReadSampleVisible(true)}
+              style={[
+                styles.aiSummaryBtn,
+                { flex: 1, backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+              ]}
+            >
+              <Ionicons name="reader-outline" size={16} color="#B45309" />
+              <Text style={[styles.aiSummaryBtnText, { color: '#92400E' }]} numberOfLines={1}>
+                Đọc thử sách
+              </Text>
+            </Pressable>
+
+            <Pressable onPress={handleAskAiSummary} style={[styles.aiSummaryBtn, { flex: 1 }]}>
+              <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+              <Text style={styles.aiSummaryBtnText} numberOfLines={1}>
+                AI tóm tắt nhanh
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Specifications Table */}
@@ -473,6 +490,258 @@ export default function BookDetailScreen() {
             resizeMode="contain"
           />
         </View>
+      </Modal>
+
+      {/* READ SAMPLE MODAL (ĐỌC THỬ SÁCH) */}
+      <Modal
+        visible={readSampleVisible}
+        animationType="slide"
+        onRequestClose={() => setReadSampleVisible(false)}
+      >
+        {(() => {
+          const palette =
+            readerTheme === 'dark'
+              ? { bg: '#0F172A', card: '#1E293B', text: '#E2E8F0', muted: '#94A3B8', border: '#334155' }
+              : readerTheme === 'sepia'
+                ? { bg: '#FAF3E0', card: '#F5E9CE', text: '#3B2F2F', muted: '#6B5B45', border: '#E6D5B8' }
+                : { bg: '#FFFFFF', card: '#F8FAFC', text: '#0F172A', muted: '#64748B', border: '#E2E8F0' };
+          return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+              {/* Reader Header */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: palette.border,
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text
+                    style={{ fontSize: 15, fontWeight: '700', color: palette.text }}
+                    numberOfLines={1}
+                  >
+                    Đọc thử: {book.title}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: palette.muted }} numberOfLines={1}>
+                    {book.authorName} • {book.publisherName}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setReadSampleVisible(false)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={28} color={palette.muted} />
+                </Pressable>
+              </View>
+
+              {/* Reader Controls: Font Size + Theme */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: palette.card,
+                  borderBottomWidth: 1,
+                  borderBottomColor: palette.border,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Pressable
+                    onPress={() => setReaderFontSize((s) => Math.max(13, s - 2))}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: palette.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: palette.text }}>A-</Text>
+                  </Pressable>
+                  <Text style={{ fontSize: 12, color: palette.muted }}>{readerFontSize}px</Text>
+                  <Pressable
+                    onPress={() => setReaderFontSize((s) => Math.min(24, s + 2))}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: palette.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: palette.text }}>A+</Text>
+                  </Pressable>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {(
+                    [
+                      { key: 'light', label: 'Sáng' },
+                      { key: 'sepia', label: 'Giấy cũ' },
+                      { key: 'dark', label: 'Đêm' },
+                    ] as const
+                  ).map((t) => (
+                    <Pressable
+                      key={t.key}
+                      onPress={() => setReaderTheme(t.key)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 999,
+                        backgroundColor:
+                          readerTheme === t.key ? colors.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor:
+                          readerTheme === t.key ? colors.primary : palette.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: '600',
+                          color: readerTheme === t.key ? '#FFFFFF' : palette.text,
+                        }}
+                      >
+                        {t.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Reader Content */}
+              <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 32 }}>
+                <View
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    backgroundColor: palette.card,
+                    borderWidth: 1,
+                    borderColor: palette.border,
+                    gap: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>
+                    MỤC LỤC TRÍCH ĐOẠN (BẢN ĐỌC THỬ)
+                  </Text>
+                  <Text style={{ fontSize: 13, color: palette.text }}>
+                    • Lời giới thiệu & Bối cảnh tác phẩm
+                  </Text>
+                  <Text style={{ fontSize: 13, color: palette.text }}>
+                    • Chương 1: Khởi nguồn và những góc nhìn đầu tiên
+                  </Text>
+                  <Text style={{ fontSize: 12, color: palette.muted, marginTop: 4 }}>
+                    Bản in đầy đủ gồm {book.pageCount > 0 ? book.pageCount : 240} trang ({book.coverFormat}) • NXB {book.publisherName}.
+                  </Text>
+                </View>
+
+                <Text
+                  style={{
+                    fontSize: readerFontSize + 3,
+                    fontWeight: '700',
+                    color: palette.text,
+                  }}
+                >
+                  Lời mở đầu
+                </Text>
+                <Text
+                  style={{
+                    fontSize: readerFontSize,
+                    lineHeight: readerFontSize * 1.65,
+                    color: palette.text,
+                  }}
+                >
+                  {book.shortSummary ||
+                    `"${book.title}" của tác giả ${book.authorName} là một trong những tác phẩm tiêu biểu thuộc dòng sách ${book.categoryName}, được độc giả yêu thích và đánh giá ${book.ratingAvg.toFixed(1)}/5 sao.`}
+                </Text>
+
+                <Text
+                  style={{
+                    fontSize: readerFontSize + 3,
+                    fontWeight: '700',
+                    color: palette.text,
+                    marginTop: 8,
+                  }}
+                >
+                  Chương 1 — Trích đoạn nội dung
+                </Text>
+                <Text
+                  style={{
+                    fontSize: readerFontSize,
+                    lineHeight: readerFontSize * 1.65,
+                    color: palette.text,
+                  }}
+                >
+                  {book.description ||
+                    `Mỗi trang sách của "${book.title}" mở ra một hành trình khám phá sâu sắc, kết hợp giữa lập luận chặt chẽ và những câu chuyện gần gũi với đời sống thực tế.`}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: readerFontSize,
+                    lineHeight: readerFontSize * 1.65,
+                    color: palette.text,
+                  }}
+                >
+                  Khi bước sâu hơn vào thế giới của tác phẩm, người đọc sẽ bắt gặp những chi tiết tinh tế mà {book.authorName} dày công xây dựng — nơi tri thức không chỉ nằm trên mặt giấy mà còn chạm tới cảm xúc và tư duy hàng ngày của mỗi chúng ta.
+                </Text>
+
+                <View
+                  style={{
+                    marginTop: 12,
+                    padding: 16,
+                    borderRadius: 12,
+                    backgroundColor: palette.card,
+                    borderWidth: 1,
+                    borderColor: palette.border,
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="book" size={26} color={colors.primary} />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '700',
+                      color: palette.text,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Hết phần đọc thử miễn phí
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12.5,
+                      color: palette.muted,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Đặt mua bản in chính hãng ({formatCurrencyVND(effectivePrice)}) để đọc trọn vẹn cuốn sách!
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setReadSampleVisible(false);
+                      handleBuyNow();
+                    }}
+                    style={{
+                      marginTop: 4,
+                      paddingHorizontal: 20,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      backgroundColor: colors.primary,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13.5 }}>
+                      Mua ngay bản đầy đủ
+                    </Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
       </Modal>
     </SafeAreaView>
   );

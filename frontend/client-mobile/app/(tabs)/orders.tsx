@@ -26,6 +26,7 @@ import { ORDER_STATUS_BADGE, colors } from '@/theme/colors';
 import { orderService } from '@/services/orderService';
 import { bookService } from '@/services/bookService';
 import { useAuth } from '@/hooks/useAuth';
+import { useCart } from '@/hooks/useCart';
 import { EmptyStateView } from '@/components/common/StateViews';
 
 const STATUS_TABS: { key: 'ALL' | OrderStatus; label: string }[] = [
@@ -43,6 +44,7 @@ const ORDER_POLL_INTERVAL_MS = 5000;
 export default function OrdersScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [activeTab, setActiveTab] = useState<'ALL' | OrderStatus>('ALL');
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -210,6 +212,34 @@ const handleConfirmReceived = async (order: Order) => {
   } catch (err) {
     setErrorBanner(
       err instanceof Error ? err.message : 'Không thể xác nhận đã nhận hàng.'
+    );
+  } finally {
+    setBusyOrderId(null);
+  }
+};
+
+const handleBuyAgain = async (order: Order) => {
+  if (busyOrderId) return;
+  setErrorBanner(null);
+  setBannerMessage(null);
+  setBusyOrderId(order.id);
+  try {
+    let addedCount = 0;
+    for (const item of order.items) {
+      const book = await bookService.getBookDetail(item.bookId);
+      if (book && book.stock > 0) {
+        const ok = await addToCart(book, Math.min(item.quantity, book.stock));
+        if (ok) addedCount++;
+      }
+    }
+    if (addedCount > 0) {
+      router.push('/cart');
+    } else {
+      setErrorBanner('Các cuốn sách trong đơn này hiện đã hết hàng hoặc ngừng kinh doanh.');
+    }
+  } catch (err) {
+    setErrorBanner(
+      err instanceof Error ? err.message : 'Không thể thêm lại sách vào giỏ hàng.'
     );
   } finally {
     setBusyOrderId(null);
@@ -485,6 +515,21 @@ const handleSubmitReturn = async () => {
                       style={styles.outlineBtn}
                     >
                       <Text style={styles.outlineBtnText}>Đổi trả</Text>
+                    </Pressable>
+                  ) : null}
+
+                  {(order.status === 'DELIVERED' || order.status === 'CANCELLED') ? (
+                    <Pressable
+                      disabled={busyOrderId === order.id}
+                      onPress={() => handleBuyAgain(order)}
+                      style={[
+                        styles.outlineBtn,
+                        { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+                      ]}
+                    >
+                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>
+                        {busyOrderId === order.id ? 'Đang thêm...' : 'Mua lại'}
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>

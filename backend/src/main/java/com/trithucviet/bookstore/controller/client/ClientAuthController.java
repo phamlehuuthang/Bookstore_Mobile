@@ -1,8 +1,10 @@
 package com.trithucviet.bookstore.controller.client;
 
 import com.trithucviet.bookstore.dto.request.ChangePasswordRequest;
+import com.trithucviet.bookstore.dto.request.ForgotPasswordRequest;
 import com.trithucviet.bookstore.dto.request.LoginRequest;
 import com.trithucviet.bookstore.dto.request.RegisterRequest;
+import com.trithucviet.bookstore.dto.request.ResetPasswordRequest;
 import com.trithucviet.bookstore.dto.request.UpdateProfileRequest;
 import com.trithucviet.bookstore.dto.response.ApiResponse;
 import com.trithucviet.bookstore.dto.response.AuthResponse;
@@ -10,6 +12,7 @@ import com.trithucviet.bookstore.dto.response.UserDto;
 import com.trithucviet.bookstore.exception.BusinessException;
 import com.trithucviet.bookstore.service.AuthService;
 import jakarta.validation.Valid;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -86,6 +89,19 @@ public class ClientAuthController {
     ) {
         authService.changePassword(requireAuthenticatedUserId(authentication), request);
         return ApiResponse.ok("Đổi mật khẩu thành công", null);
+    }
+
+    // Quên mật khẩu - Bước 1: gửi mã OTP 6 chữ số (công khai)
+    @PostMapping("/api/v1/auth/forgot-password")
+    public ApiResponse<Map<String, Object>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ApiResponse.ok("Đã tạo mã xác thực OTP khôi phục mật khẩu", authService.requestPasswordResetOtp(request));
+    }
+
+    // Quên mật khẩu - Bước 2: xác thực OTP & đặt mật khẩu mới (công khai)
+    @PostMapping("/api/v1/auth/reset-password")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPasswordWithOtp(request);
+        return ApiResponse.ok("Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.", null);
     }
 
     private String requireAuthenticatedUserId(Authentication authentication) {

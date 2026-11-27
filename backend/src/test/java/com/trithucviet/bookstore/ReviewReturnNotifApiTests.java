@@ -371,6 +371,11 @@ class ReviewReturnNotifApiTests {
 
     @Test
     void adminVaCskhDuyetDoiTra_khongDoiKhoVaThanhToan_guiThongBao_chanKhoVaDuyetLai() throws Exception {
+        // Đảm bảo dt_01 đang ở trạng thái CHO_DUYET trong transaction test (tự rollback sau test)
+        entityManager.createNativeQuery("UPDATE yeu_cau_doi_tra SET trang_thai = 'CHO_DUYET', ngay_xu_ly = NULL WHERE id = 'dt_01'").executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+
         // WAREHOUSE_MANAGER & CUSTOMER bị chặn 403
         mockMvc.perform(get("/api/admin/orders/returns").header("Authorization", warehouseToken))
                 .andExpect(status().isForbidden());
